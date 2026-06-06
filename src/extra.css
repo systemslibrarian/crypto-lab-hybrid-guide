@@ -883,9 +883,13 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .mb-packet--small { left: 80%; opacity: 1; }
-  .mb-packet--big[style*="0s"] { left: 78%; opacity: 1; }
-  .mb-packet--big[style*="0.7s"] { left: 48%; opacity: 1; background: linear-gradient(135deg, var(--accent-2), color-mix(in oklab, var(--accent-2) 70%, white)); }
-  .mb-packet--big[style*="1.4s"] { left: 18%; opacity: 1; }
+  .mb-packet--frag1 { left: 78%; opacity: 1; }
+  .mb-packet--frag2 {
+    left: 48%;
+    opacity: 1;
+    background: linear-gradient(135deg, var(--accent-2), color-mix(in oklab, var(--accent-2) 70%, white));
+  }
+  .mb-packet--frag3 { left: 18%; opacity: 1; }
 }
 
 @media (max-width: 720px) {

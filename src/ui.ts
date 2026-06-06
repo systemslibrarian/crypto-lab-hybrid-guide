@@ -209,7 +209,6 @@ interface PlaygroundController {
 
 function renderPlayground(): { node: HTMLElement; controller: PlaygroundController } {
 	const section = el('section', 'lab-section reveal');
-	section.id = 'section-playground';
 	section.setAttribute('aria-labelledby', 'playground-heading');
 	section.innerHTML = `
     <div class="section-heading-row">
@@ -668,9 +667,11 @@ function renderTimeline(): HTMLElement {
 	const crqcYear =
 		TIMELINE_EVENTS.find((e) => e.classical === 'broken')?.year ?? 2035;
 
-	// Stable display hashes for the "recorded in 2025" cards.
-	const classicalHash = bytesToHex(freshComponents().classical).slice(0, 32);
-	const hybridHash = bytesToHex(freshComponents().pq).slice(0, 32);
+	// Stable display hashes for the "recorded in 2025" cards (one CSPRNG
+	// call yields both, no need to draw a second set of components).
+	const displayComps = freshComponents();
+	const classicalHash = bytesToHex(displayComps.classical).slice(0, 32);
+	const hybridHash = bytesToHex(displayComps.pq).slice(0, 32);
 
 	section.innerHTML = `
     <div class="section-heading-row">
@@ -705,8 +706,8 @@ function renderTimeline(): HTMLElement {
       <div class="timeline-readout">
         <div class="timeline-year" id="timeline-year">${TIMELINE_EVENTS[initialIdx].year}</div>
         <div class="timeline-states">
-          <span class="state-chip state-chip--classical" id="state-classical">classical: <strong>safe</strong></span>
-          <span class="state-chip state-chip--pq" id="state-pq">post-quantum: <strong>safe</strong></span>
+          <span class="state-chip" id="state-classical" data-state="safe">classical: <strong>safe</strong></span>
+          <span class="state-chip" id="state-pq" data-state="safe">post-quantum: <strong>safe</strong></span>
         </div>
       </div>
       <div class="timeline-body">
@@ -770,17 +771,13 @@ function renderTimeline(): HTMLElement {
 		return best;
 	}
 
-	function stateLabel(s: 'safe' | 'fragile' | 'broken'): string {
-		return s === 'safe' ? 'safe' : s === 'fragile' ? 'fragile' : 'broken';
-	}
-
 	function paint(year: number): void {
 		const event = currentEvent(year);
 		yearEl.textContent = String(year);
 		labelEl.textContent = event.label;
 		detailEl.textContent = event.detail;
-		stateClassical.innerHTML = `classical: <strong>${stateLabel(event.classical)}</strong>`;
-		statePq.innerHTML = `post-quantum: <strong>${stateLabel(event.pq)}</strong>`;
+		stateClassical.innerHTML = `classical: <strong>${event.classical}</strong>`;
+		statePq.innerHTML = `post-quantum: <strong>${event.pq}</strong>`;
 		stateClassical.dataset.state = event.classical;
 		statePq.dataset.state = event.pq;
 
@@ -873,7 +870,7 @@ function renderHandshake(): HTMLElement {
           <span class="mb-lane__tag">classical · 64 B</span>
           <div class="mb-lane__track">
             <span class="mb-icon mb-icon--client" aria-hidden="true">client</span>
-            <span class="mb-icon mb-icon--firewall mb-icon--firewall--open" aria-hidden="true">middlebox</span>
+            <span class="mb-icon mb-icon--firewall" aria-hidden="true">middlebox</span>
             <span class="mb-icon mb-icon--server" aria-hidden="true">server</span>
             <span class="mb-packet mb-packet--small mb-packet--pass">X25519</span>
           </div>
@@ -885,9 +882,9 @@ function renderHandshake(): HTMLElement {
             <span class="mb-icon mb-icon--client" aria-hidden="true">client</span>
             <span class="mb-icon mb-icon--firewall mb-icon--firewall--strict" aria-hidden="true">middlebox</span>
             <span class="mb-icon mb-icon--server" aria-hidden="true">server</span>
-            <span class="mb-packet mb-packet--big mb-packet--pass" style="--mb-delay:0s">frag 1</span>
-            <span class="mb-packet mb-packet--big mb-packet--drop" style="--mb-delay:0.7s">frag 2</span>
-            <span class="mb-packet mb-packet--big mb-packet--pass" style="--mb-delay:1.4s">frag 3</span>
+            <span class="mb-packet mb-packet--big mb-packet--pass mb-packet--frag1" style="--mb-delay:0s">frag 1</span>
+            <span class="mb-packet mb-packet--big mb-packet--drop mb-packet--frag2" style="--mb-delay:0.7s">frag 2</span>
+            <span class="mb-packet mb-packet--big mb-packet--pass mb-packet--frag3" style="--mb-delay:1.4s">frag 3</span>
           </div>
           <span class="mb-lane__verdict mb-lane__verdict--bad">connection stalls</span>
         </div>
@@ -967,48 +964,55 @@ function renderBenchmark(): HTMLElement {
 		btn.disabled = true;
 		btn.textContent = 'Running…';
 		stateEl.textContent = 'Warming up…';
-		await new Promise((r) => requestAnimationFrame(() => r(null)));
+		try {
+			await new Promise((r) => requestAnimationFrame(() => r(null)));
 
-		const WARMUP = 200;
-		const N = 4000;
+			const WARMUP = 200;
+			const N = 4000;
 
-		for (let i = 0; i < WARMUP; i++) {
-			const c = freshComponents();
-			await deriveSessionKey(c, 'xwing');
+			for (let i = 0; i < WARMUP; i++) {
+				const c = freshComponents();
+				await deriveSessionKey(c, 'xwing');
+			}
+
+			stateEl.textContent = 'Timing freshComponents…';
+			await new Promise((r) => requestAnimationFrame(() => r(null)));
+			let t0 = performance.now();
+			for (let i = 0; i < N; i++) freshComponents();
+			let t1 = performance.now();
+			const freshMs = (t1 - t0) / N;
+
+			const comps = freshComponents();
+
+			stateEl.textContent = 'Timing naive combiner…';
+			await new Promise((r) => requestAnimationFrame(() => r(null)));
+			t0 = performance.now();
+			for (let i = 0; i < N; i++) await deriveSessionKey(comps, 'naive');
+			t1 = performance.now();
+			const naiveMs = (t1 - t0) / N;
+
+			stateEl.textContent = 'Timing X-Wing-style combiner…';
+			await new Promise((r) => requestAnimationFrame(() => r(null)));
+			t0 = performance.now();
+			for (let i = 0; i < N; i++) await deriveSessionKey(comps, 'xwing');
+			t1 = performance.now();
+			const xwingMs = (t1 - t0) / N;
+
+			set('bench-fresh', format(freshMs));
+			set('bench-naive', format(naiveMs));
+			set('bench-xwing', format(xwingMs));
+			set('bench-total', format(freshMs + xwingMs));
+
+			stateEl.textContent = `${N.toLocaleString()} iterations per measurement · ${WARMUP} iterations of warmup.`;
+			toast('Benchmark complete', 'ok');
+		} catch (err) {
+			console.error('benchmark failed', err);
+			stateEl.textContent = 'Benchmark failed — see console for details.';
+			toast('Benchmark failed', 'warn');
+		} finally {
+			btn.disabled = false;
+			btn.textContent = 'Run again';
 		}
-
-		stateEl.textContent = 'Timing freshComponents…';
-		await new Promise((r) => requestAnimationFrame(() => r(null)));
-		let t0 = performance.now();
-		for (let i = 0; i < N; i++) freshComponents();
-		let t1 = performance.now();
-		const freshMs = (t1 - t0) / N;
-
-		const comps = freshComponents();
-
-		stateEl.textContent = 'Timing naive combiner…';
-		await new Promise((r) => requestAnimationFrame(() => r(null)));
-		t0 = performance.now();
-		for (let i = 0; i < N; i++) await deriveSessionKey(comps, 'naive');
-		t1 = performance.now();
-		const naiveMs = (t1 - t0) / N;
-
-		stateEl.textContent = 'Timing X-Wing-style combiner…';
-		await new Promise((r) => requestAnimationFrame(() => r(null)));
-		t0 = performance.now();
-		for (let i = 0; i < N; i++) await deriveSessionKey(comps, 'xwing');
-		t1 = performance.now();
-		const xwingMs = (t1 - t0) / N;
-
-		set('bench-fresh', format(freshMs));
-		set('bench-naive', format(naiveMs));
-		set('bench-xwing', format(xwingMs));
-		set('bench-total', format(freshMs + xwingMs));
-
-		stateEl.textContent = `${N.toLocaleString()} iterations per measurement · ${WARMUP} iterations of warmup.`;
-		btn.disabled = false;
-		btn.textContent = 'Run again';
-		toast('Benchmark complete', 'ok');
 	}
 
 	btn.addEventListener('click', () => void runBenchmark());

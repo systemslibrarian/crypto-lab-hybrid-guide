@@ -55,7 +55,9 @@ mountApp(document.querySelector<HTMLDivElement>('#app')!);
 		const target = document.getElementById(id);
 		if (!target) return;
 		event.preventDefault();
-		target.focus({ preventScroll: false });
+		// preventScroll on focus so the focus call doesn't snap the page
+		// instantly before scrollIntoView's smooth animation begins.
+		target.focus({ preventScroll: true });
 		target.scrollIntoView({ block: 'start', behavior: 'smooth' });
 	});
 })();
