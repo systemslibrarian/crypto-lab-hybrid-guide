@@ -125,7 +125,9 @@ function renderNav(): HTMLElement {
 					}
 				});
 			},
-			{ rootMargin: '-40% 0px -55% 0px', threshold: 0 },
+			// Wide active band so headings reliably register as the user scrolls;
+			// a narrow band could skip past tall headings without ever firing.
+			{ rootMargin: '-25% 0px -50% 0px', threshold: 0 },
 		);
 		headings.forEach((h) => observer.observe(h));
 	});
@@ -583,17 +585,26 @@ const sessionKey = new Uint8Array(
 		attackResult.hidden = false;
 	});
 
+	// Default labels captured once so rapid double-clicks cannot get the
+	// button stuck on the "Copied" string. Each click cancels any pending
+	// restore timer before scheduling a new one.
+	const COPY_KEY_LABEL = copyBtn.textContent ?? 'Copy';
+	const COPY_CODE_LABEL = copyCodeBtn.textContent ?? 'Copy snippet';
+	let copyKeyTimer: number | undefined;
+	let copyCodeTimer: number | undefined;
+
 	copyCodeBtn.addEventListener('click', async () => {
 		const text = $('code-block').textContent ?? '';
 		try {
 			await navigator.clipboard.writeText(text);
-			const original = copyCodeBtn.textContent;
 			copyCodeBtn.textContent = 'Copied';
 			copyCodeBtn.classList.add('is-copied');
 			toast('Snippet copied', 'ok');
-			window.setTimeout(() => {
-				copyCodeBtn.textContent = original;
+			if (copyCodeTimer !== undefined) window.clearTimeout(copyCodeTimer);
+			copyCodeTimer = window.setTimeout(() => {
+				copyCodeBtn.textContent = COPY_CODE_LABEL;
 				copyCodeBtn.classList.remove('is-copied');
+				copyCodeTimer = undefined;
 			}, 1400);
 		} catch {
 			toast('Copy failed', 'warn');
@@ -604,13 +615,14 @@ const sessionKey = new Uint8Array(
 		const text = $('session-key').textContent ?? '';
 		try {
 			await navigator.clipboard.writeText(text);
-			const original = copyBtn.textContent;
 			copyBtn.textContent = 'Copied';
 			copyBtn.classList.add('is-copied');
 			toast('Session key copied', 'ok');
-			window.setTimeout(() => {
-				copyBtn.textContent = original;
+			if (copyKeyTimer !== undefined) window.clearTimeout(copyKeyTimer);
+			copyKeyTimer = window.setTimeout(() => {
+				copyBtn.textContent = COPY_KEY_LABEL;
 				copyBtn.classList.remove('is-copied');
+				copyKeyTimer = undefined;
 			}, 1400);
 		} catch {
 			toast('Copy failed — select the text manually', 'warn');
@@ -1157,6 +1169,11 @@ function initShortcuts(controller: PlaygroundController): void {
 			case 'm':
 				controller.cycleCombiner();
 				break;
+			case 't': {
+				const themeBtn = document.getElementById('theme-toggle') as HTMLButtonElement | null;
+				themeBtn?.click();
+				break;
+			}
 			default:
 				return;
 		}

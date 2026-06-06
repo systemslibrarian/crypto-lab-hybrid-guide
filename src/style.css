@@ -355,6 +355,18 @@ button:disabled {
   border-radius: 6px;
 }
 
+/* Anchored section headings: keep the sticky in-page nav from covering
+   the heading when scrolled into view via the skip-link or nav clicks. */
+.lab-section h2[id] {
+  scroll-margin-top: 96px;
+}
+
+@media (max-width: 720px) {
+  .lab-section h2[id] {
+    scroll-margin-top: 80px;
+  }
+}
+
 .panel-card h3,
 .scenario-card h3 {
   font-size: 1.15rem;
