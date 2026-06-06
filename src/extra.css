@@ -112,8 +112,25 @@
   height: auto;
   margin: 0 auto;
 }
-.combiner-diagram svg path { transition: stroke 260ms ease, stroke-dasharray 260ms ease; }
+.combiner-diagram svg path {
+  transition: stroke 260ms ease;
+  stroke-dasharray: 6 4;
+  animation: combiner-flow 1.8s linear infinite;
+}
+.combiner-diagram svg path.is-broken {
+  stroke: var(--accent-2) !important;
+  stroke-dasharray: 4 4;
+  animation: none;
+}
 .combiner-diagram svg rect { transition: stroke 260ms ease; }
+.combiner-diagram svg rect#diag-classical-rect.is-broken { stroke: var(--accent-2); }
+.combiner-diagram svg rect#diag-pq-rect.is-broken { stroke: var(--accent-2); }
+@keyframes combiner-flow {
+  to { stroke-dashoffset: -20; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .combiner-diagram svg path { animation: none; stroke-dasharray: 0; }
+}
 
 /* --- combiner flow --- */
 .combiner-flow { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 18px; }
@@ -474,6 +491,233 @@
   background: var(--warning-bg);
   border-color: var(--warning-border);
   color: var(--warning-fg);
+}
+
+/* --- harvest-now demo --- */
+.harvest-block {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--line);
+}
+.harvest-block__label {
+  margin: 0 0 12px;
+  font-size: 0.78rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 700;
+}
+.harvest-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.harvest-card {
+  position: relative;
+  overflow: hidden;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--panel);
+  transition: background 400ms ease, border-color 400ms ease;
+}
+.harvest-card--classical { border-left: 4px solid var(--accent); }
+.harvest-card--hybrid {
+  border-left: 4px solid var(--accent-4);
+  background: color-mix(in oklab, var(--accent-4) 10%, var(--panel));
+}
+.harvest-card__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.harvest-card__lock {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--mono-block-bg);
+  color: var(--mono-block-fg);
+  font-size: 1.2rem;
+  transition: background 400ms ease, transform 400ms ease;
+}
+.harvest-card__year {
+  margin: 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  font-family: var(--mono);
+}
+.harvest-card__title {
+  margin: 2px 0 0;
+  font-weight: 700;
+  color: var(--ink-strong);
+}
+.harvest-card__hash {
+  display: block;
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  font-size: 0.78rem;
+}
+.harvest-card__status {
+  margin: 8px 0 0;
+  font-size: 0.86rem;
+  color: var(--ink-soft);
+  font-family: var(--mono);
+}
+.harvest-card--hybrid .harvest-card__status { color: var(--accent-4); }
+.harvest-card__crack {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background-image:
+    linear-gradient(115deg, transparent 48%, color-mix(in oklab, var(--accent-2) 60%, transparent) 49%, color-mix(in oklab, var(--accent-2) 60%, transparent) 50%, transparent 51%),
+    linear-gradient(65deg, transparent 38%, color-mix(in oklab, var(--accent-2) 60%, transparent) 39%, color-mix(in oklab, var(--accent-2) 60%, transparent) 40%, transparent 41%);
+  transition: opacity 400ms ease;
+}
+.harvest-card.is-cracked {
+  background: var(--warning-bg);
+  border-color: var(--warning-border);
+}
+.harvest-card.is-cracked .harvest-card__lock {
+  background: var(--accent-2);
+  color: #fff;
+  transform: rotate(-12deg);
+}
+.harvest-card.is-cracked .harvest-card__hash {
+  text-decoration: line-through;
+  color: var(--accent-2);
+}
+.harvest-card.is-cracked .harvest-card__status {
+  color: var(--accent-2);
+  font-weight: 700;
+}
+.harvest-card.is-cracked .harvest-card__crack { opacity: 0.9; }
+
+@media (max-width: 720px) {
+  .harvest-grid { grid-template-columns: 1fr; }
+}
+
+/* --- code snippet panel --- */
+.code-panel {
+  margin-top: 14px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--panel);
+  overflow: hidden;
+}
+.code-panel > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 12px 18px;
+  font-weight: 700;
+  color: var(--ink-strong);
+  user-select: none;
+}
+.code-panel > summary::-webkit-details-marker { display: none; }
+.code-panel > summary::before {
+  content: '▸ ';
+  color: var(--accent);
+  display: inline-block;
+  transition: transform 180ms ease;
+}
+.code-panel[open] > summary::before { content: '▾ '; }
+.code-panel > summary:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+.code-block {
+  margin: 0;
+  padding: 14px 18px;
+  background: var(--mono-block-bg);
+  color: var(--mono-block-fg);
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  line-height: 1.55;
+  overflow-x: auto;
+  white-space: pre;
+  border-top: 1px solid var(--line);
+}
+.code-panel__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 18px;
+  border-top: 1px solid var(--line);
+}
+.code-panel__hint {
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+}
+
+/* --- attack simulator --- */
+.attack-row {
+  margin-top: 18px;
+  display: grid;
+  gap: 14px;
+}
+.attack-row .action-button--danger {
+  justify-self: start;
+  text-align: left;
+}
+.attack-result {
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  line-height: 1.55;
+  font-size: 0.94rem;
+}
+.attack-result code {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--mono-block-bg);
+  color: var(--mono-block-fg);
+  font-family: var(--mono);
+  font-size: 0.86em;
+}
+.attack-result[data-tone="bad"] {
+  background: var(--warning-bg);
+  border-color: var(--warning-border);
+  color: var(--warning-fg);
+}
+.attack-result[data-tone="ok"] {
+  background: color-mix(in oklab, var(--accent-4) 14%, transparent);
+  border-color: var(--accent-4);
+  color: var(--accent-4);
+}
+.attack-result strong { color: inherit; }
+
+/* session-key flash states from attack button */
+#session-key.is-attacked {
+  animation: key-shake 480ms ease;
+  border: 1px solid var(--accent-2);
+}
+#session-key.is-shielded {
+  animation: key-shield 600ms ease;
+  border: 1px solid var(--accent-4);
+}
+@keyframes key-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(2px); }
+}
+@keyframes key-shield {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  50% { box-shadow: 0 0 0 6px color-mix(in oklab, var(--accent-4) 40%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #session-key.is-attacked,
+  #session-key.is-shielded { animation: none; }
+}
+
+@media (max-width: 720px) {
+  .attack-row .action-button--danger { justify-self: stretch; }
 }
 
 /* --- handshake size --- */

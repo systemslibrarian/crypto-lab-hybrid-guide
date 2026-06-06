@@ -308,6 +308,22 @@ function renderPlayground(): { node: HTMLElement; controller: PlaygroundControll
       <p class="panel-copy formula-note" id="formula-note"></p>
     </div>
 
+    <details class="code-panel">
+      <summary>Show the Web Crypto snippet</summary>
+      <pre class="code-block"><code id="code-block"></code></pre>
+      <div class="code-panel__actions">
+        <button type="button" class="ghost-button ghost-button--compact" id="copy-code">Copy snippet</button>
+        <span class="code-panel__hint">Pure browser primitives — no dependencies.</span>
+      </div>
+    </details>
+
+    <div class="attack-row">
+      <button type="button" class="action-button action-button--danger" id="run-attack">
+        Simulate re-encapsulation attack
+      </button>
+      <div class="attack-result" id="attack-result" hidden></div>
+    </div>
+
     <div class="session-out panel-card" aria-live="polite">
       <div class="panel-header">
         <h3>Derived session key</h3>
@@ -354,6 +370,9 @@ function renderPlayground(): { node: HTMLElement; controller: PlaygroundControll
 	const combinerSel = $('combiner') as HTMLSelectElement;
 	const copyBtn = $('copy-key') as HTMLButtonElement;
 	const entropyTrack = $('entropy-track');
+	const attackBtn = $('run-attack') as HTMLButtonElement;
+	const attackResult = $('attack-result');
+	const copyCodeBtn = $('copy-code') as HTMLButtonElement;
 
 	// Render bit grids once. Each cell = 1 bit; 16×16 = 256 bits per half.
 	function buildGrid(host: HTMLElement, kind: 'classical' | 'pq') {
@@ -371,20 +390,54 @@ function renderPlayground(): { node: HTMLElement; controller: PlaygroundControll
 	let comps: Components = freshComponents();
 	let lastHeadline = '';
 
+	const SNIPPET_NAIVE = `// Naive concatenation combiner
+const ssClassical = crypto.getRandomValues(new Uint8Array(32));
+const ssPq        = crypto.getRandomValues(new Uint8Array(32));
+
+const data = new Uint8Array(ssClassical.length + ssPq.length);
+data.set(ssClassical, 0);
+data.set(ssPq, ssClassical.length);
+
+const sessionKey = new Uint8Array(
+  await crypto.subtle.digest('SHA-256', data),
+);`;
+
+	const SNIPPET_XWING = `// X-Wing-style bound combiner
+const ssClassical = crypto.getRandomValues(new Uint8Array(32));
+const ssPq        = crypto.getRandomValues(new Uint8Array(32));
+const ctBinding   = crypto.getRandomValues(new Uint8Array(32));
+const label       = new TextEncoder().encode('crypto-lab-hybrid');
+
+const data = new Uint8Array(
+  label.length + ssPq.length + ssClassical.length + ctBinding.length,
+);
+let off = 0;
+data.set(label, off);        off += label.length;
+data.set(ssPq, off);         off += ssPq.length;
+data.set(ssClassical, off);  off += ssClassical.length;
+data.set(ctBinding, off);
+
+const sessionKey = new Uint8Array(
+  await crypto.subtle.digest('SHA-256', data),
+);`;
+
 	function updateFormula(combiner: Combiner): void {
 		const body = $('formula-body');
 		const note = $('formula-note');
+		const code = $('code-block');
 		const label = section.querySelector<SVGTextElement>('#diag-combiner-label');
 		if (combiner === 'naive') {
 			body.textContent = 'K = SHA-256( ss_classical ‖ ss_pq )';
 			note.textContent =
 				'Just concatenates and hashes. Sufficient when both halves are random, but does not bind the transcript — a real attacker can re-encapsulate.';
+			code.textContent = SNIPPET_NAIVE;
 			if (label) label.textContent = 'SHA-256 ‖';
 		} else {
 			body.textContent =
 				'K = SHA-256( "crypto-lab-hybrid" ‖ ss_pq ‖ ss_classical ‖ ct_binding )';
 			note.textContent =
 				'Domain-separated and transcript-bound, à la X-Wing. The label and ciphertext binding make re-encapsulation attacks fail.';
+			code.textContent = SNIPPET_XWING;
 			if (label) label.textContent = 'SHA-256 ⊕';
 		}
 	}
@@ -397,16 +450,10 @@ function renderPlayground(): { node: HTMLElement; controller: PlaygroundControll
 		const classicalState = section.querySelector<SVGTextElement>('#diag-classical-state');
 		const pqState = section.querySelector<SVGTextElement>('#diag-pq-state');
 
-		if (classicalPath)
-			classicalPath.setAttribute('stroke', state.classicalBroken ? 'var(--accent-2)' : 'url(#diagFlow)');
-		if (pqPath)
-			pqPath.setAttribute('stroke', state.pqBroken ? 'var(--accent-2)' : 'url(#diagFlow)');
-		if (classicalPath)
-			classicalPath.setAttribute('stroke-dasharray', state.classicalBroken ? '4 4' : '0');
-		if (pqPath) pqPath.setAttribute('stroke-dasharray', state.pqBroken ? '4 4' : '0');
-		if (classicalRect)
-			classicalRect.setAttribute('stroke', state.classicalBroken ? 'var(--accent-2)' : 'var(--accent)');
-		if (pqRect) pqRect.setAttribute('stroke', state.pqBroken ? 'var(--accent-2)' : 'var(--accent-3)');
+		classicalPath?.classList.toggle('is-broken', state.classicalBroken);
+		pqPath?.classList.toggle('is-broken', state.pqBroken);
+		classicalRect?.classList.toggle('is-broken', state.classicalBroken);
+		pqRect?.classList.toggle('is-broken', state.pqBroken);
 		if (classicalState) classicalState.textContent = state.classicalBroken ? 'broken' : 'intact';
 		if (pqState) pqState.textContent = state.pqBroken ? 'broken' : 'intact';
 	}
@@ -486,7 +533,11 @@ function renderPlayground(): { node: HTMLElement; controller: PlaygroundControll
 
 	breakClassical.addEventListener('change', () => void refresh());
 	breakPq.addEventListener('change', () => void refresh());
-	combinerSel.addEventListener('change', () => void refresh());
+	combinerSel.addEventListener('change', () => {
+		attackResult.hidden = true;
+		$('session-key').classList.remove('is-attacked', 'is-shielded');
+		void refresh();
+	});
 	$('regen').addEventListener('click', () => {
 		comps = freshComponents();
 		toast('New session generated', 'info');
@@ -498,6 +549,54 @@ function renderPlayground(): { node: HTMLElement; controller: PlaygroundControll
 			const name = btn.getAttribute('data-scenario');
 			if (name) applyScenario(name);
 		});
+	});
+
+	attackBtn.addEventListener('click', () => {
+		const combiner = combinerSel.value as Combiner;
+		const sessionKey = $('session-key');
+		sessionKey.classList.remove('is-attacked', 'is-shielded');
+		// Re-trigger animation by forcing reflow.
+		void sessionKey.offsetWidth;
+		if (combiner === 'naive') {
+			attackResult.dataset.tone = 'bad';
+			attackResult.innerHTML = `
+        <strong>Attack succeeds.</strong> Without a transcript binding, an
+        attacker re-encapsulates the PQ ciphertext, forces a colliding
+        component secret, and the SHA-256 of the concatenation lands on a
+        key they can compute. X-Wing prevents this with the
+        <code>ct_binding</code> term inside the hash input.
+      `;
+			sessionKey.classList.add('is-attacked');
+			toast('Naive combiner compromised', 'warn');
+		} else {
+			attackResult.dataset.tone = 'ok';
+			attackResult.innerHTML = `
+        <strong>Attack deflected.</strong> The transcript binding inside the
+        hash (<code>ct_binding</code> plus the domain-separation label) makes
+        the attacker’s forced ciphertext land on a different session key —
+        the collision they need does not exist.
+      `;
+			sessionKey.classList.add('is-shielded');
+			toast('X-Wing combiner held', 'ok');
+		}
+		attackResult.hidden = false;
+	});
+
+	copyCodeBtn.addEventListener('click', async () => {
+		const text = $('code-block').textContent ?? '';
+		try {
+			await navigator.clipboard.writeText(text);
+			const original = copyCodeBtn.textContent;
+			copyCodeBtn.textContent = 'Copied';
+			copyCodeBtn.classList.add('is-copied');
+			toast('Snippet copied', 'ok');
+			window.setTimeout(() => {
+				copyCodeBtn.textContent = original;
+				copyCodeBtn.classList.remove('is-copied');
+			}, 1400);
+		} catch {
+			toast('Copy failed', 'warn');
+		}
 	});
 
 	async function copyKey(): Promise<void> {
@@ -553,6 +652,12 @@ function renderTimeline(): HTMLElement {
 	const minYear = Math.min(...years);
 	const maxYear = Math.max(...years);
 	const initialIdx = TIMELINE_EVENTS.findIndex((e) => e.year === 2025);
+	const crqcYear =
+		TIMELINE_EVENTS.find((e) => e.classical === 'broken')?.year ?? 2035;
+
+	// Stable display hashes for the "recorded in 2025" cards.
+	const classicalHash = bytesToHex(freshComponents().classical).slice(0, 32);
+	const hybridHash = bytesToHex(freshComponents().pq).slice(0, 32);
 
 	section.innerHTML = `
     <div class="section-heading-row">
@@ -596,6 +701,35 @@ function renderTimeline(): HTMLElement {
         <p class="panel-copy" id="timeline-detail">${TIMELINE_EVENTS[initialIdx].detail}</p>
         <p class="timeline-implication" id="timeline-implication"></p>
       </div>
+
+      <div class="harvest-block" aria-label="Harvest-now, decrypt-later demonstration">
+        <p class="harvest-block__label">Two sessions recorded by an adversary in 2025</p>
+        <div class="harvest-grid">
+          <article class="harvest-card harvest-card--classical" id="harvest-classical">
+            <header class="harvest-card__head">
+              <span class="harvest-card__lock" aria-hidden="true">🔒</span>
+              <div>
+                <p class="harvest-card__year">recorded · 2025</p>
+                <p class="harvest-card__title">Classical-only (X25519)</p>
+              </div>
+            </header>
+            <p class="harvest-card__hash mono-inline" aria-label="Ciphertext sample">${classicalHash}…</p>
+            <p class="harvest-card__status" id="harvest-classical-status">still encrypted</p>
+            <div class="harvest-card__crack" aria-hidden="true"></div>
+          </article>
+          <article class="harvest-card harvest-card--hybrid" id="harvest-hybrid">
+            <header class="harvest-card__head">
+              <span class="harvest-card__lock" aria-hidden="true">🔒</span>
+              <div>
+                <p class="harvest-card__year">recorded · 2025</p>
+                <p class="harvest-card__title">Hybrid X25519MLKEM768</p>
+              </div>
+            </header>
+            <p class="harvest-card__hash mono-inline" aria-label="Ciphertext sample">${hybridHash}…</p>
+            <p class="harvest-card__status" id="harvest-hybrid-status">still encrypted</p>
+          </article>
+        </div>
+      </div>
     </div>
   `;
 
@@ -606,6 +740,14 @@ function renderTimeline(): HTMLElement {
 	const implEl = section.querySelector<HTMLElement>('#timeline-implication')!;
 	const stateClassical = section.querySelector<HTMLElement>('#state-classical')!;
 	const statePq = section.querySelector<HTMLElement>('#state-pq')!;
+	const harvestClassical = section.querySelector<HTMLElement>('#harvest-classical')!;
+	const harvestClassicalStatus = section.querySelector<HTMLElement>(
+		'#harvest-classical-status',
+	)!;
+	const harvestClassicalLock = harvestClassical.querySelector<HTMLElement>(
+		'.harvest-card__lock',
+	)!;
+	const harvestHybridStatus = section.querySelector<HTMLElement>('#harvest-hybrid-status')!;
 
 	function currentEvent(year: number): TimelineEvent {
 		let best = TIMELINE_EVENTS[0];
@@ -642,6 +784,16 @@ function renderTimeline(): HTMLElement {
 				'Both halves intact. Hybrid users pay the small handshake-size cost; classical-only users carry an invisible liability forward.';
 			implEl.dataset.tone = 'ok';
 		}
+
+		const cracked = year >= crqcYear;
+		harvestClassical.classList.toggle('is-cracked', cracked);
+		harvestClassicalLock.textContent = cracked ? '🔓' : '🔒';
+		harvestClassicalStatus.textContent = cracked
+			? `decrypted in ${year} · classical half broke`
+			: 'still encrypted';
+		harvestHybridStatus.textContent = cracked
+			? 'still encrypted · ML-KEM half holds'
+			: 'still encrypted';
 	}
 
 	slider.addEventListener('input', () => paint(Number(slider.value)));
