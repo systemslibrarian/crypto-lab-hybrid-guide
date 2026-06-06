@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem('theme');
+          var prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+          var initial = saved || (prefersLight ? 'light' : 'dark');
+          document.documentElement.setAttribute('data-theme', initial);
+        } catch (_) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      })();
+    </script>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="theme-color" content="#12101a" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#fff7eb" media="(prefers-color-scheme: light)" />
+    <meta
+      name="description"
+      content="Interactive guide to hybrid post-quantum cryptography — how a KEM combiner pairs X25519 with ML-KEM so a connection stays secure as long as either half holds, when to use hybrids, and how to migrate."
+    />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Hybrid Cryptography Guide — crypto-lab" />
+    <meta
+      property="og:description"
+      content="An interactive lab for hybrid post-quantum KEMs. Break a half, watch the hedge hold. Live combiner demo, decision guide, and migration pitfalls."
+    />
+    <meta property="og:image" content="favicon.svg" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Hybrid Cryptography Guide — crypto-lab" />
+    <meta
+      name="twitter:description"
+      content="Break the classical half or the post-quantum half and watch the session key stay secure. A live hybrid KEM combiner demo."
+    />
+
+    <title>Hybrid Cryptography Guide — crypto-lab</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#playground-heading">Skip to interactive demo</a>
+    <div id="app"></div>
+    <div id="a11y-announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
