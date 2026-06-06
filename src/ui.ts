@@ -73,6 +73,7 @@ const SECTIONS: SectionAnchor[] = [
 	{ id: 'playground-heading', label: 'Combiner' },
 	{ id: 'timeline-heading', label: 'Timeline' },
 	{ id: 'handshake-heading', label: 'Wire Size' },
+	{ id: 'benchmark-heading', label: 'Performance' },
 	{ id: 'decision-heading', label: 'Decide' },
 	{ id: 'deployments-heading', label: 'In Production' },
 	{ id: 'pitfalls-heading', label: 'Practice' },
@@ -848,7 +849,157 @@ function renderHandshake(): HTMLElement {
       about 3%. The lesson: if you are already paying the PQ cost, the hybrid hedge is
       essentially free.
     </p>
+
+    <figure class="middlebox-figure" aria-label="Middlebox fragmentation visualization">
+      <figcaption class="middlebox-figure__caption">
+        <strong>Middlebox ossification:</strong> pre-PQ network gear assumed the TLS
+        ClientHello fit in one packet. Larger PQ key shares can fragment and trip
+        old firewalls — the lesson from Google's CECPQ2 rollout.
+      </figcaption>
+      <div class="middlebox-stage">
+        <div class="mb-lane">
+          <span class="mb-lane__tag">classical · 64 B</span>
+          <div class="mb-lane__track">
+            <span class="mb-icon mb-icon--client" aria-hidden="true">client</span>
+            <span class="mb-icon mb-icon--firewall mb-icon--firewall--open" aria-hidden="true">middlebox</span>
+            <span class="mb-icon mb-icon--server" aria-hidden="true">server</span>
+            <span class="mb-packet mb-packet--small mb-packet--pass">X25519</span>
+          </div>
+          <span class="mb-lane__verdict mb-lane__verdict--ok">handshake completes</span>
+        </div>
+        <div class="mb-lane mb-lane--pq">
+          <span class="mb-lane__tag">hybrid · 2.3 KB</span>
+          <div class="mb-lane__track">
+            <span class="mb-icon mb-icon--client" aria-hidden="true">client</span>
+            <span class="mb-icon mb-icon--firewall mb-icon--firewall--strict" aria-hidden="true">middlebox</span>
+            <span class="mb-icon mb-icon--server" aria-hidden="true">server</span>
+            <span class="mb-packet mb-packet--big mb-packet--pass" style="--mb-delay:0s">frag 1</span>
+            <span class="mb-packet mb-packet--big mb-packet--drop" style="--mb-delay:0.7s">frag 2</span>
+            <span class="mb-packet mb-packet--big mb-packet--pass" style="--mb-delay:1.4s">frag 3</span>
+          </div>
+          <span class="mb-lane__verdict mb-lane__verdict--bad">connection stalls</span>
+        </div>
+      </div>
+    </figure>
   `;
+	return section;
+}
+
+// --- performance benchmark -------------------------------------------------
+function renderBenchmark(): HTMLElement {
+	const section = el('section', 'lab-section reveal');
+	section.setAttribute('aria-labelledby', 'benchmark-heading');
+	section.innerHTML = `
+    <div class="section-heading-row">
+      <div>
+        <p class="section-kicker">Performance</p>
+        <h2 id="benchmark-heading" tabindex="-1">Cost on This Device</h2>
+        <p class="section-footnote">
+          Real numbers, measured right now in your browser. The combiner uses
+          Web Crypto SHA-256; component "secrets" are CSPRNG byte draws, since
+          this lab does not ship a full ML-KEM implementation.
+        </p>
+      </div>
+      <button type="button" class="action-button" id="run-benchmark" aria-describedby="bench-state">
+        Run benchmark
+      </button>
+    </div>
+
+    <p class="bench-state" id="bench-state" aria-live="polite">Click <strong>Run benchmark</strong> to time the combiner here.</p>
+
+    <ol class="bench-grid">
+      <li class="bench-tile" id="bench-fresh">
+        <p class="bench-tile__label">freshComponents()</p>
+        <p class="bench-tile__value mono-inline mono-inline--meter">—</p>
+        <p class="bench-tile__note">3 × 32-byte CSPRNG draws (X25519, ML-KEM, ct binding)</p>
+      </li>
+      <li class="bench-tile" id="bench-naive">
+        <p class="bench-tile__label">Naive combiner</p>
+        <p class="bench-tile__value mono-inline mono-inline--meter">—</p>
+        <p class="bench-tile__note">SHA-256( ss_classical ‖ ss_pq )</p>
+      </li>
+      <li class="bench-tile" id="bench-xwing">
+        <p class="bench-tile__label">X-Wing-style combiner</p>
+        <p class="bench-tile__value mono-inline mono-inline--meter">—</p>
+        <p class="bench-tile__note">SHA-256( label ‖ ss_pq ‖ ss_classical ‖ ct )</p>
+      </li>
+      <li class="bench-tile bench-tile--headline" id="bench-total">
+        <p class="bench-tile__label">Full hybrid handshake (KDF only)</p>
+        <p class="bench-tile__value mono-inline mono-inline--meter">—</p>
+        <p class="bench-tile__note">freshComponents + X-Wing combiner per session</p>
+      </li>
+    </ol>
+
+    <p class="panel-copy">
+      For context, real X25519 takes roughly 50&nbsp;µs and a real ML-KEM-768 encap is
+      around 30&nbsp;µs on a modern laptop CPU — well under any human-perceptible
+      threshold. The bottleneck for hybrid deployments has never been compute; it is
+      the larger handshake on the wire, which the previous section quantified.
+    </p>
+  `;
+
+	const btn = section.querySelector<HTMLButtonElement>('#run-benchmark')!;
+	const stateEl = section.querySelector<HTMLElement>('#bench-state')!;
+	const set = (id: string, value: string) => {
+		const v = section.querySelector<HTMLElement>('#' + id + ' .bench-tile__value');
+		if (v) v.textContent = value;
+	};
+
+	function format(ms: number): string {
+		if (ms < 0.001) return (ms * 1_000_000).toFixed(2) + ' ns';
+		if (ms < 1) return (ms * 1000).toFixed(1) + ' µs';
+		return ms.toFixed(2) + ' ms';
+	}
+
+	async function runBenchmark(): Promise<void> {
+		btn.disabled = true;
+		btn.textContent = 'Running…';
+		stateEl.textContent = 'Warming up…';
+		await new Promise((r) => requestAnimationFrame(() => r(null)));
+
+		const WARMUP = 200;
+		const N = 4000;
+
+		for (let i = 0; i < WARMUP; i++) {
+			const c = freshComponents();
+			await deriveSessionKey(c, 'xwing');
+		}
+
+		stateEl.textContent = 'Timing freshComponents…';
+		await new Promise((r) => requestAnimationFrame(() => r(null)));
+		let t0 = performance.now();
+		for (let i = 0; i < N; i++) freshComponents();
+		let t1 = performance.now();
+		const freshMs = (t1 - t0) / N;
+
+		const comps = freshComponents();
+
+		stateEl.textContent = 'Timing naive combiner…';
+		await new Promise((r) => requestAnimationFrame(() => r(null)));
+		t0 = performance.now();
+		for (let i = 0; i < N; i++) await deriveSessionKey(comps, 'naive');
+		t1 = performance.now();
+		const naiveMs = (t1 - t0) / N;
+
+		stateEl.textContent = 'Timing X-Wing-style combiner…';
+		await new Promise((r) => requestAnimationFrame(() => r(null)));
+		t0 = performance.now();
+		for (let i = 0; i < N; i++) await deriveSessionKey(comps, 'xwing');
+		t1 = performance.now();
+		const xwingMs = (t1 - t0) / N;
+
+		set('bench-fresh', format(freshMs));
+		set('bench-naive', format(naiveMs));
+		set('bench-xwing', format(xwingMs));
+		set('bench-total', format(freshMs + xwingMs));
+
+		stateEl.textContent = `${N.toLocaleString()} iterations per measurement · ${WARMUP} iterations of warmup.`;
+		btn.disabled = false;
+		btn.textContent = 'Run again';
+		toast('Benchmark complete', 'ok');
+	}
+
+	btn.addEventListener('click', () => void runBenchmark());
 	return section;
 }
 
@@ -1022,6 +1173,7 @@ export function mountApp(root: HTMLDivElement): void {
 		playground,
 		renderTimeline(),
 		renderHandshake(),
+		renderBenchmark(),
 		renderDecision(),
 		renderDeployments(),
 		renderPitfalls(),
