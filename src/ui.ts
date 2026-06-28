@@ -1120,6 +1120,18 @@ function renderFooter(): HTMLElement {
       <span class="footer-meta__sep" aria-hidden="true">·</span>
       <a href="https://csrc.nist.gov/pubs/fips/203/final" rel="noopener">ML-KEM (FIPS 203)</a>
     </p>
+    <p class="footer-meta">
+      Related demos:
+      <a href="https://systemslibrarian.github.io/crypto-lab-hybrid-wire/" rel="noopener">crypto-lab-hybrid-wire</a>
+      <span class="footer-meta__sep" aria-hidden="true">·</span>
+      <a href="https://systemslibrarian.github.io/crypto-lab-pq-tls-handshake/" rel="noopener">crypto-lab-pq-tls-handshake</a>
+      <span class="footer-meta__sep" aria-hidden="true">·</span>
+      <a href="https://systemslibrarian.github.io/crypto-lab-kyber-vault/" rel="noopener">crypto-lab-kyber-vault</a>
+      <span class="footer-meta__sep" aria-hidden="true">·</span>
+      <a href="https://systemslibrarian.github.io/crypto-lab-hybrid-sign/" rel="noopener">crypto-lab-hybrid-sign</a>
+      <span class="footer-meta__sep" aria-hidden="true">·</span>
+      <a href="https://systemslibrarian.github.io/crypto-lab-pq-rotation/" rel="noopener">crypto-lab-pq-rotation</a>
+    </p>
     <p class="scripture">“So whether you eat or drink or whatever you do, do it all for the glory of God.” — 1 Corinthians 10:31</p>
   `;
 	return footer;
