@@ -14,7 +14,7 @@ An interactive guide to hybrid cryptography, the recommended strategy for the tr
 
 ## Live Demo
 
-[**https://systemslibrarian.github.io/crypto-lab-hybrid-guide/**](https://systemslibrarian.github.io/crypto-lab-hybrid-guide/)
+**[systemslibrarian.github.io/crypto-lab-hybrid-guide](https://systemslibrarian.github.io/crypto-lab-hybrid-guide/)**
 
 Generate a fresh session and watch two component shared secrets — classical X25519 and post-quantum ML-KEM-768 — feed a combiner that derives one session key via Web Crypto. Toggle "quantum computer breaks this" on the classical half or "cryptanalysis breaks this" on the post-quantum half: the verdict and the attacker's remaining-uncertainty bar update live, showing the session key stays secure until both halves fall. Switch between a naive concatenation combiner and an X-Wing-style bound combiner to see the construction difference. Below the playground, a decision guide, a list of real production deployments (TLS 1.3 X25519MLKEM768, Cloudflare, X-Wing, Google's CECPQ experiments, Signal PQXDH), and a do/watch-out practice section complete the picture.
 
@@ -34,6 +34,23 @@ Generate a fresh session and watch two component shared secrets — classical X2
 - **Signal PQXDH** — augments Signal's classical extended Diffie-Hellman with a post-quantum KEM for messaging key establishment.
 - **Harvest-now-decrypt-later defense** — organisations enable hybrids today so traffic recorded now cannot be decrypted later once large-scale quantum computers exist.
 
+## How to Run Locally
+
+```bash
+git clone https://github.com/systemslibrarian/crypto-lab-hybrid-guide
+cd crypto-lab-hybrid-guide
+npm install
+npm run dev
+```
+
+## Related Demos
+
+- [crypto-lab-hybrid-wire](https://systemslibrarian.github.io/crypto-lab-hybrid-wire/) — the same X25519 + ML-KEM-768 hybrid driving an end-to-end encrypted session.
+- [crypto-lab-pq-tls-handshake](https://systemslibrarian.github.io/crypto-lab-pq-tls-handshake/) — the X25519MLKEM768 hybrid inside a real TLS 1.3 key schedule.
+- [crypto-lab-kyber-vault](https://systemslibrarian.github.io/crypto-lab-kyber-vault/) — ML-KEM (FIPS 203), the post-quantum half of the combiner.
+- [crypto-lab-hybrid-sign](https://systemslibrarian.github.io/crypto-lab-hybrid-sign/) — the same defense-in-depth idea applied to signatures.
+- [crypto-lab-pq-rotation](https://systemslibrarian.github.io/crypto-lab-pq-rotation/) — planning the hybrid X.509 / CNSA 2.0 migration this guide motivates.
+
 ## Tech
 
 Vite + TypeScript, zero runtime dependencies. `src/engine.ts` implements the KEM combiners (real SHA-256 via Web Crypto) and the break-state assessment; `src/data.ts` holds the decision guide, deployments, and pitfalls; `src/ui.ts` is the interactive playground. Dark mode by default with a persisted theme toggle.
@@ -46,4 +63,6 @@ npm run build    # type-check + production build to dist/
 
 ---
 
-"So whether you eat or drink or whatever you do, do it all for the glory of God." — 1 Corinthians 10:31
+*One of 60+ browser demos in the [Crypto Lab](https://crypto-lab.systemslibrarian.dev/) suite.*
+
+*"So whether you eat or drink or whatever you do, do it all for the glory of God." — 1 Corinthians 10:31*
