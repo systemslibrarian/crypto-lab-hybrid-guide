@@ -7,7 +7,7 @@
   --panel-strong: rgba(255, 255, 255, 0.94);
   --accent: #0b6f96;
   --accent-2: #b03333;
-  --accent-3: #c79a30;
+  --accent-3: #9a6700;
   --accent-4: #0f6357;
   --shadow: 0 20px 60px rgba(34, 21, 40, 0.14);
   --mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
@@ -36,7 +36,7 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  color-scheme: dark light;
+  color-scheme: light;
 }
 
 [data-theme="dark"] {
@@ -64,6 +64,7 @@
   --warning-fg: #fbb7b7;
   --warning-border: rgba(240, 104, 104, 0.28);
   --focus-ring: #f6d574;
+  color-scheme: dark;
 }
 
 * {
@@ -101,7 +102,7 @@ a:focus-visible {
   overflow: hidden;
   z-index: 100;
   padding: 12px 18px;
-  background: var(--accent);
+  background-color: var(--accent);
   color: #fff;
   font-weight: 700;
   border-radius: 0 0 12px 0;
@@ -116,6 +117,11 @@ a:focus-visible {
   height: auto;
   outline: 3px solid var(--focus-ring);
   outline-offset: 0;
+}
+
+/* dark theme's --accent is a light hue; keep skip-link text readable on it */
+[data-theme="dark"] .skip-link {
+  color: #08141d;
 }
 
 .sr-only {
@@ -180,7 +186,7 @@ button:disabled {
   padding: 30px;
   border: 1px solid var(--line);
   border-radius: 28px;
-  background: var(--panel);
+  background-color: var(--panel);
   box-shadow: var(--shadow);
 }
 
@@ -193,7 +199,7 @@ button:disabled {
   width: fit-content;
   padding: 10px 14px;
   border-radius: 999px;
-  background: rgba(11, 127, 171, 0.12);
+  background-color: rgba(11, 127, 171, 0.12);
   color: var(--accent);
   font-family: var(--mono);
   font-size: 0.84rem;
@@ -232,7 +238,7 @@ button:disabled {
   padding: 16px 18px;
   border: 1px solid var(--line);
   border-radius: 20px;
-  background: var(--panel);
+  background-color: var(--panel);
 }
 
 .why-details summary,
@@ -292,7 +298,7 @@ button:disabled {
   width: fit-content;
   padding: 2px 8px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.1);
+  background-color: rgba(255, 255, 255, 0.1);
   color: var(--metric-fg);
   font-size: 0.78rem;
   letter-spacing: 0.1em;
@@ -309,12 +315,12 @@ button:disabled {
   padding: 28px;
   border: 1px solid var(--line);
   border-radius: 28px;
-  background: var(--panel);
+  background-color: var(--panel);
   box-shadow: var(--shadow);
 }
 
 .lab-section--footer {
-  background: transparent;
+  background-color: transparent;
   box-shadow: none;
   border-style: dashed;
 }
@@ -419,8 +425,19 @@ button:disabled {
   box-shadow: 0 12px 24px rgba(196, 59, 59, 0.22);
 }
 
+/* dark theme accents are light hues: mixing toward black lands mid-tone and
+   fails contrast with light text, so use light gradients with dark text. */
+[data-theme="dark"] .action-button {
+  background: linear-gradient(135deg, var(--accent), color-mix(in oklab, var(--accent) 75%, white));
+  color: #08141d;
+}
+
+[data-theme="dark"] .action-button--danger {
+  background: linear-gradient(135deg, var(--accent-2), color-mix(in oklab, var(--accent-2) 75%, white));
+}
+
 .ghost-button {
-  background: var(--panel-strong);
+  background-color: var(--panel-strong);
   color: var(--ink-strong);
   border: 1px solid var(--line);
 }
@@ -432,7 +449,7 @@ button:disabled {
 }
 
 .ghost-button.is-copied {
-  background: color-mix(in oklab, var(--accent-4) 22%, var(--panel-strong));
+  background-color: color-mix(in oklab, var(--accent-4) 22%, var(--panel-strong));
   color: var(--accent-4);
   border-color: var(--accent-4);
 }
@@ -476,7 +493,7 @@ button:disabled {
   padding: 22px;
   border: 1px solid var(--line);
   border-radius: 24px;
-  background: var(--panel-strong);
+  background-color: var(--panel-strong);
 }
 
 .panel-card--wide {
@@ -506,7 +523,7 @@ button:disabled {
   border: 1px solid var(--line);
   border-radius: 18px;
   resize: vertical;
-  background: var(--input-bg);
+  background-color: var(--input-bg);
   color: var(--ink-strong);
 }
 
@@ -522,7 +539,7 @@ button:disabled {
 
 .mono-block,
 .mono-inline {
-  background: var(--mono-block-bg);
+  background-color: var(--mono-block-bg);
   color: var(--mono-block-fg);
   letter-spacing: 0.06em;
 }
@@ -535,7 +552,7 @@ button:disabled {
 }
 
 .preview-block {
-  background: var(--input-bg);
+  background-color: var(--input-bg);
   color: var(--ink-strong);
   border: 1px solid var(--line);
   white-space: pre-wrap;
@@ -611,7 +628,7 @@ button:disabled {
   width: 100%;
   border-collapse: collapse;
   min-width: 920px;
-  background: var(--panel-strong);
+  background-color: var(--panel-strong);
 }
 
 .math-table th,
@@ -623,7 +640,7 @@ button:disabled {
 }
 
 .math-table th {
-  background: rgba(11, 127, 171, 0.08);
+  background-color: rgba(11, 127, 171, 0.08);
   color: var(--ink-strong);
 }
 
@@ -657,7 +674,7 @@ button:disabled {
   padding: 16px 18px;
   border: 1px solid var(--warning-border);
   border-radius: 20px;
-  background: var(--warning-bg);
+  background-color: var(--warning-bg);
   color: var(--warning-fg);
 }
 
@@ -674,14 +691,14 @@ button:disabled {
 
 .tab-button {
   padding: 12px 18px;
-  background: var(--panel-strong);
+  background-color: var(--panel-strong);
   color: var(--ink-soft);
   border: 1px solid var(--line);
   font-weight: 700;
 }
 
 .tab-button.is-active {
-  background: var(--mono-block-bg);
+  background-color: var(--mono-block-bg);
   color: var(--mono-block-fg);
 }
 
@@ -709,7 +726,7 @@ button:disabled {
   height: 44px;
   border: 1px solid var(--line);
   border-radius: 50%;
-  background: var(--panel-strong);
+  background-color: var(--panel-strong);
   color: var(--ink-strong);
   font-size: 1.2rem;
   cursor: pointer;
@@ -817,6 +834,6 @@ button:disabled {
   .entropy-fill,
   .entropy-fill--ok,
   .entropy-fill--bad {
-    background: Highlight !important;
+    background-color: Highlight !important;
   }
 }
