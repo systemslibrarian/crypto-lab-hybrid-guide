@@ -351,6 +351,7 @@ function renderPlayground(): { node: HTMLElement; controller: PlaygroundControll
         <div
           class="entropy-track"
           role="progressbar"
+          aria-label="Attacker remaining uncertainty in bits"
           aria-valuemin="0"
           aria-valuemax="512"
           aria-valuenow="0"
