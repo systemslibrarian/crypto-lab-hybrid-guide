@@ -5,8 +5,24 @@ import {
 	deriveSessionKey,
 	freshComponents,
 	randomBytes,
+	reencapPair,
+	reencapsulationAttack,
 	sha256,
+	type Components,
 } from './engine.ts';
+
+// Fixed component secrets for known-answer tests.
+function fixedComponents(): Components {
+	const classical = new Uint8Array(32);
+	const pq = new Uint8Array(32);
+	const ctBinding = new Uint8Array(32);
+	for (let i = 0; i < 32; i++) {
+		classical[i] = i; // 0x00..0x1f
+		pq[i] = 0x20 + i; // 0x20..0x3f
+		ctBinding[i] = 0x40 + i; // 0x40..0x5f
+	}
+	return { classical, pq, ctBinding };
+}
 
 describe('bytesToHex', () => {
 	it('returns lowercase hex of the right length', () => {
@@ -171,5 +187,81 @@ describe('assess naive combiner caveat', () => {
 	it('does NOT append the naive caveat when both halves are broken (already insecure)', () => {
 		const v = assess({ classicalBroken: true, pqBroken: true }, 'naive');
 		expect(v.detail).not.toMatch(/robust combiner/);
+	});
+});
+
+// Known-answer tests pin the EXACT output of each combiner for fixed inputs.
+// These lock the labelled construction in place: if the label, field ordering,
+// or hash ever changes, these fail. They also document that this SHA-256 +
+// "crypto-lab-hybrid" label construction is INTENTIONALLY non-interoperable
+// with real X-Wing (which uses SHA3-256 and a fixed 6-byte label) — these
+// vectors will never match an X-Wing reference vector, and that is by design.
+describe('combiner known-answer tests (labelled construction)', () => {
+	it('naive combiner: H(ss_classical ‖ ss_pq) matches its fixed KAT', async () => {
+		const key = await deriveSessionKey(fixedComponents(), 'naive');
+		expect(bytesToHex(key)).toBe(
+			'fdeab9acf3710362bd2658cdc9a29e8f9c757fcf9811603a8c447cd1d9151108',
+		);
+	});
+
+	it('X-Wing-style combiner: H(label ‖ ss_pq ‖ ss_classical ‖ ct) matches its fixed KAT', async () => {
+		const key = await deriveSessionKey(fixedComponents(), 'xwing');
+		expect(bytesToHex(key)).toBe(
+			'01d9273724d30153c2a37d41062ae25ca8beb516739471776f6f9d7f5613b523',
+		);
+	});
+
+	it('the two KATs differ, proving the label/binding actually change the output', async () => {
+		const naive = await deriveSessionKey(fixedComponents(), 'naive');
+		const xwing = await deriveSessionKey(fixedComponents(), 'xwing');
+		expect(bytesToHex(naive)).not.toBe(bytesToHex(xwing));
+	});
+});
+
+// The core honesty fix: a REAL, computed re-encapsulation attack. Two protocol
+// runs share their component secrets but differ only in ct_binding (transcript).
+// A sound combiner must derive DIFFERENT keys; an unbound one collides.
+describe('re-encapsulation attack (transcript binding)', () => {
+	it('reencapPair: shares component secrets but differs in ct_binding', () => {
+		const { honest, forged } = reencapPair();
+		expect(bytesToHex(honest.classical)).toBe(bytesToHex(forged.classical));
+		expect(bytesToHex(honest.pq)).toBe(bytesToHex(forged.pq));
+		expect(bytesToHex(honest.ctBinding)).not.toBe(bytesToHex(forged.ctBinding));
+	});
+
+	it('NAIVE combiner is broken: forged transcript yields the SAME key ⇒ attack succeeds', async () => {
+		const { honest, forged } = reencapPair();
+		const r = await reencapsulationAttack(honest, forged, 'naive');
+		expect(bytesToHex(r.honestKey)).toBe(bytesToHex(r.forgedKey));
+		expect(r.keysCollide).toBe(true);
+		expect(r.attackSucceeds).toBe(true);
+	});
+
+	it('X-WING combiner defends: forged transcript yields a DIFFERENT key ⇒ attack fails', async () => {
+		const { honest, forged } = reencapPair();
+		const r = await reencapsulationAttack(honest, forged, 'xwing');
+		expect(bytesToHex(r.honestKey)).not.toBe(bytesToHex(r.forgedKey));
+		expect(r.keysCollide).toBe(false);
+		expect(r.attackSucceeds).toBe(false);
+	});
+
+	it('the attack outcome is measured, not asserted: naive collides across many trials', async () => {
+		for (let i = 0; i < 25; i++) {
+			const { honest, forged } = reencapPair();
+			const naive = await reencapsulationAttack(honest, forged, 'naive');
+			const xwing = await reencapsulationAttack(honest, forged, 'xwing');
+			expect(naive.attackSucceeds).toBe(true);
+			expect(xwing.attackSucceeds).toBe(false);
+		}
+	});
+
+	it('with fixed inputs the naive collision is exact (honest = forged key)', async () => {
+		const classical = randomBytes(32);
+		const pq = randomBytes(32);
+		const honest: Components = { classical, pq, ctBinding: randomBytes(32) };
+		const forged: Components = { classical, pq, ctBinding: randomBytes(32) };
+		const naiveHonest = await deriveSessionKey(honest, 'naive');
+		const naiveForged = await deriveSessionKey(forged, 'naive');
+		expect(bytesToHex(naiveHonest)).toBe(bytesToHex(naiveForged));
 	});
 });

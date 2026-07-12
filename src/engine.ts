@@ -125,3 +125,73 @@ export function assess(state: BreakState, combiner: Combiner): Verdict {
 
 	return { remainingBits, secure, headline, detail };
 }
+
+// --- re-encapsulation / transcript-binding demonstration -------------------
+//
+// This is a REAL, computed demonstration (not a scripted animation) of why an
+// unbound combiner is dangerous.
+//
+// Setup: two runs of the protocol share the SAME component shared secrets
+// (ss_classical, ss_pq) but differ in their transcript / ciphertext binding.
+// This is precisely the situation a re-encapsulation attacker engineers: KEM
+// ciphertexts are not, in general, bound to their shared secret, so an attacker
+// who can re-encapsulate produces a DIFFERENT ciphertext transcript that still
+// decapsulates to the SAME shared secret at the honest party.
+//
+//   * The NAIVE combiner K = H(ss_c \u2016 ss_pq) ignores the transcript entirely,
+//     so BOTH runs derive the IDENTICAL session key. The key is not bound to
+//     the handshake the parties think they ran \u2014 the attack succeeds.
+//
+//   * The X-WING-style combiner folds ct_binding into the hash, so the two
+//     transcripts derive DIFFERENT session keys \u2014 the collision the attacker
+//     needs does not exist. The attack fails.
+//
+// We prove the outcome by actually deriving both keys and comparing them, so
+// the verdict below is measured, never asserted.
+
+export interface ReencapResult {
+	combiner: Combiner;
+	honestKey: Uint8Array; // key from the honest transcript
+	forgedKey: Uint8Array; // key from the attacker's re-encapsulated transcript
+	keysCollide: boolean; // true \u21d2 same key under both transcripts
+	attackSucceeds: boolean; // true \u21d2 unbound: attacker recovers the honest key
+}
+
+// Run the re-encapsulation experiment for a given combiner. `honest` and
+// `forged` share their component secrets but carry different ct bindings.
+export async function reencapsulationAttack(
+	honest: Components,
+	forged: Components,
+	combiner: Combiner,
+): Promise<ReencapResult> {
+	const honestKey = await deriveSessionKey(honest, combiner);
+	const forgedKey = await deriveSessionKey(forged, combiner);
+	const keysCollide = bytesToHex(honestKey) === bytesToHex(forgedKey);
+	return {
+		combiner,
+		honestKey,
+		forgedKey,
+		// The attack "succeeds" when the attacker's re-encapsulated (forged)
+		// transcript yields the same session key as the honest one \u2014 i.e. the
+		// key is NOT bound to the transcript.
+		attackSucceeds: keysCollide,
+		keysCollide,
+	};
+}
+
+// Build an honest/forged transcript pair that shares component secrets but
+// differs only in ct_binding \u2014 the exact input a re-encapsulation attacker
+// controls. Component secrets are reused deliberately; ct_binding differs.
+export function reencapPair(): { honest: Components; forged: Components } {
+	const classical = randomBytes(32);
+	const pq = randomBytes(32);
+	const honest: Components = { classical, pq, ctBinding: randomBytes(32) };
+	// Same shared secrets, different transcript (a re-encapsulated ciphertext).
+	let forgedBinding = randomBytes(32);
+	// Vanishingly unlikely, but keep the two transcripts distinct.
+	while (bytesToHex(forgedBinding) === bytesToHex(honest.ctBinding)) {
+		forgedBinding = randomBytes(32);
+	}
+	const forged: Components = { classical, pq, ctBinding: forgedBinding };
+	return { honest, forged };
+}

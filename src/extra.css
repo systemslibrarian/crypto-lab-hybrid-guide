@@ -694,6 +694,19 @@
   color: var(--accent-4);
 }
 .attack-result strong { color: inherit; }
+.attack-intro { margin: 0; }
+.attack-keys {
+  margin-top: 12px;
+  display: grid;
+  gap: 4px;
+  font-size: 0.9rem;
+}
+.attack-keys p { margin: 0; }
+.attack-keys__verdict {
+  margin-top: 4px;
+  font-weight: 600;
+  font-style: italic;
+}
 
 /* session-key flash states from attack button */
 #session-key.is-attacked {

@@ -4,6 +4,8 @@ import {
 	deriveSessionKey,
 	assess,
 	bytesToHex,
+	reencapPair,
+	reencapsulationAttack,
 	type Components,
 	type Combiner,
 	type BreakState,
@@ -320,8 +322,15 @@ function renderPlayground(): { node: HTMLElement; controller: PlaygroundControll
     </details>
 
     <div class="attack-row">
+      <p class="attack-intro panel-copy">
+        Re-encapsulation attack, computed live: two protocol runs share the same
+        component secrets but carry <em>different</em> ciphertext transcripts — exactly
+        what an attacker who re-encapsulates controls. We derive both session keys with
+        the selected combiner and compare them. If they collide, the key was never bound
+        to the handshake and the attacker wins.
+      </p>
       <button type="button" class="action-button action-button--danger" id="run-attack">
-        Simulate re-encapsulation attack
+        Run re-encapsulation attack
       </button>
       <div class="attack-result" id="attack-result" hidden></div>
     </div>
@@ -554,36 +563,62 @@ const sessionKey = new Uint8Array(
 		});
 	});
 
-	attackBtn.addEventListener('click', () => {
+	attackBtn.addEventListener('click', () => void runReencapAttack());
+
+	async function runReencapAttack(): Promise<void> {
 		const combiner = combinerSel.value as Combiner;
 		const sessionKey = $('session-key');
 		sessionKey.classList.remove('is-attacked', 'is-shielded');
 		// Re-trigger animation by forcing reflow.
 		void sessionKey.offsetWidth;
-		if (combiner === 'naive') {
+
+		// Actually run the experiment: one shared-secret pair, two transcripts.
+		const { honest, forged } = reencapPair();
+		const result = await reencapsulationAttack(honest, forged, combiner);
+		const honestHex = bytesToHex(result.honestKey);
+		const forgedHex = bytesToHex(result.forgedKey);
+		const shortH = honestHex.slice(0, 20);
+		const shortF = forgedHex.slice(0, 20);
+
+		if (result.attackSucceeds) {
 			attackResult.dataset.tone = 'bad';
 			attackResult.innerHTML = `
-        <strong>Attack succeeds.</strong> Without a transcript binding, an
-        attacker re-encapsulates the PQ ciphertext, forces a colliding
-        component secret, and the SHA-256 of the concatenation lands on a
-        key they can compute. X-Wing prevents this with the
-        <code>ct_binding</code> term inside the hash input.
+        <strong>Attack succeeds — the two keys collide.</strong>
+        The naive combiner is <code>H(ss_classical ‖ ss_pq)</code>, which never
+        touches the transcript, so a re-encapsulated ciphertext that decapsulates
+        to the same shared secrets derives the <em>same</em> session key.
+        <div class="attack-keys">
+          <p>honest transcript &nbsp;→&nbsp; <code>${shortH}…</code></p>
+          <p>forged transcript &nbsp;→&nbsp; <code>${shortF}…</code></p>
+          <p class="attack-keys__verdict">identical ⇒ key not bound to the handshake</p>
+        </div>
       `;
 			sessionKey.classList.add('is-attacked');
-			toast('Naive combiner compromised', 'warn');
+			toast('Naive combiner: keys collide', 'warn');
 		} else {
 			attackResult.dataset.tone = 'ok';
 			attackResult.innerHTML = `
-        <strong>Attack deflected.</strong> The transcript binding inside the
-        hash (<code>ct_binding</code> plus the domain-separation label) makes
-        the attacker’s forced ciphertext land on a different session key —
-        the collision they need does not exist.
+        <strong>Attack fails — the two keys differ.</strong>
+        The X-Wing-style combiner folds <code>ct_binding</code> (and a
+        domain-separation label) into the hash, so the attacker's re-encapsulated
+        transcript derives a <em>different</em> session key. The collision they
+        need does not exist.
+        <div class="attack-keys">
+          <p>honest transcript &nbsp;→&nbsp; <code>${shortH}…</code></p>
+          <p>forged transcript &nbsp;→&nbsp; <code>${shortF}…</code></p>
+          <p class="attack-keys__verdict">different ⇒ key bound to the handshake</p>
+        </div>
       `;
 			sessionKey.classList.add('is-shielded');
-			toast('X-Wing combiner held', 'ok');
+			toast('X-Wing combiner: keys differ', 'ok');
 		}
 		attackResult.hidden = false;
-	});
+		announce(
+			result.attackSucceeds
+				? 'Re-encapsulation attack succeeds: the naive combiner produced the same key for both transcripts.'
+				: 'Re-encapsulation attack fails: the bound combiner produced different keys for the two transcripts.',
+		);
+	}
 
 	// Default labels captured once so rapid double-clicks cannot get the
 	// button stuck on the "Copied" string. Each click cancels any pending
