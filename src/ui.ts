@@ -139,62 +139,28 @@ function renderNav(): HTMLElement {
 
 // --- hero ------------------------------------------------------------------
 function renderHero(): HTMLElement {
-	const hero = el('header', 'hero-panel');
+	const hero = el('header', 'cl-hero');
 	hero.innerHTML = `
-    <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch theme" aria-pressed="false">
+    <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch theme" aria-pressed="false" hidden>
       <span class="theme-toggle__icon" aria-hidden="true">\u{1F319}</span>
     </button>
-    <div class="hero-copy">
-      <a class="portfolio-badge" href="https://github.com/systemslibrarian?tab=repositories&q=crypto-lab">crypto-lab · portfolio</a>
-      <p class="eyebrow">Post-Quantum · Migration</p>
-      <h1>Hybrid Guide</h1>
-      <p class="hero-text">
-        During the transition to post-quantum cryptography, the safe move is not to replace
-        classical algorithms but to <em>combine</em> them with post-quantum ones. A hybrid KEM
-        runs both a classical key exchange (X25519) and a post-quantum one (ML-KEM) and binds the
-        results, so the session key stays secret as long as <em>either</em> half holds.
+    <div class="cl-hero-main">
+      <h1 class="cl-hero-title">Hybrid KEM</h1>
+      <p class="cl-hero-sub">X25519 + ML-KEM-768 · KEM combiner</p>
+      <p class="cl-hero-desc">
+        Break the classical or the post-quantum half and watch a transcript-bound
+        combiner keep the derived session key secure as long as either secret holds.
       </p>
-      <div class="hero-cta-row">
-        <a class="action-button" href="#playground-heading" data-anchor>Try the combiner</a>
-        <a class="ghost-button" href="#timeline-heading" data-anchor>See the timeline</a>
-      </div>
-      <details class="why-details">
-        <summary>Why hybrid instead of pure PQC?</summary>
-        <p>
-          Two risks at once: a quantum computer could break classical X25519, and undiscovered
-          cryptanalysis could weaken a young PQC scheme. A hybrid hedges both — an attacker has
-          to break both halves at the same time. It is the recommended interim strategy until
-          PQC has years of scrutiny behind it.
-        </p>
-      </details>
     </div>
-    <aside class="hero-metric-card" aria-label="The hybrid promise">
-      <p class="hero-metric-label">The hybrid promise</p>
-      <p class="hero-metric-value">
-        secure if <span class="hero-metric-strong">X25519 holds</span>
-        <span class="hero-metric-or">OR</span>
-        <span class="hero-metric-strong">ML-KEM holds</span>
+    <aside class="cl-hero-why" aria-label="Why it matters">
+      <span class="cl-hero-why-label">WHY IT MATTERS</span>
+      <p class="cl-hero-why-text">
+        A quantum computer could break X25519, and young PQC schemes could still fall to
+        cryptanalysis. Hybrids hedge both at once, and a bound combiner — unlike naive
+        concatenation — resists the re-encapsulation attacks that unbind a key from its handshake.
       </p>
-      <p class="hero-metric-note">Break one, the other still protects you.</p>
-      <dl class="hero-stat-grid">
-        <div><dt>NIST std.</dt><dd>FIPS 203</dd></div>
-        <div><dt>Component bits</dt><dd>2 × 256</dd></div>
-        <div><dt>Combiner</dt><dd>SHA-256</dd></div>
-      </dl>
     </aside>
   `;
-
-	hero.querySelectorAll<HTMLAnchorElement>('a[data-anchor]').forEach((a) => {
-		a.addEventListener('click', (event) => {
-			const href = a.getAttribute('href') ?? '';
-			const id = href.replace(/^#/, '');
-			const target = document.getElementById(id);
-			if (!target) return;
-			event.preventDefault();
-			target.focus({ preventScroll: true });
-			target.scrollIntoView({ block: 'start', behavior: 'smooth' });
-		});
-	});
 
 	return hero;
 }
