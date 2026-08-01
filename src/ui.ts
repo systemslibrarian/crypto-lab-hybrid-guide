@@ -228,7 +228,7 @@ function renderPlayground(): { node: HTMLElement; controller: PlaygroundControll
     <div class="combiner-flow">
       <div class="comp-card comp-card--classical" id="card-classical">
         <p class="comp-label">Classical · X25519</p>
-        <p class="mono-inline comp-secret" id="ss-classical" aria-label="Classical shared secret">—</p>
+        <p class="mono-inline comp-secret" id="ss-classical">—</p>
         <label class="break-toggle">
           <input type="checkbox" id="break-classical" />
           <span>Quantum computer breaks this</span>
@@ -236,7 +236,7 @@ function renderPlayground(): { node: HTMLElement; controller: PlaygroundControll
       </div>
       <div class="comp-card comp-card--pq" id="card-pq">
         <p class="comp-label">Post-Quantum · ML-KEM-768</p>
-        <p class="mono-inline comp-secret" id="ss-pq" aria-label="Post-quantum shared secret">—</p>
+        <p class="mono-inline comp-secret" id="ss-pq">—</p>
         <label class="break-toggle">
           <input type="checkbox" id="break-pq" />
           <span>Cryptanalysis breaks this</span>
@@ -304,14 +304,14 @@ function renderPlayground(): { node: HTMLElement; controller: PlaygroundControll
     <div class="session-out panel-card" aria-live="polite">
       <div class="panel-header">
         <h3>Derived session key</h3>
-        <span id="verdict-chip" class="vs-chip" aria-label="Verdict">—</span>
+        <span id="verdict-chip" class="vs-chip">—</span>
       </div>
       <div class="session-key-row">
-        <p class="mono-block" id="session-key" aria-label="Session key in hexadecimal">—</p>
+        <p class="mono-block" id="session-key">—</p>
         <button type="button" id="copy-key" class="ghost-button ghost-button--compact" aria-label="Copy session key to clipboard">Copy</button>
       </div>
 
-      <div class="bitgrid-wrap" aria-label="Attacker remaining uncertainty, visualised as bits">
+      <div class="bitgrid-wrap" role="group" aria-label="Attacker remaining uncertainty, visualised as bits">
         <p class="hero-metric-label">Attacker’s remaining uncertainty <span class="bitgrid-count" id="bitgrid-count" aria-hidden="true"></span></p>
         <div class="bitgrid-pair">
           <div class="bitgrid-col">
@@ -718,7 +718,7 @@ function renderTimeline(): HTMLElement {
         <p class="timeline-implication" id="timeline-implication"></p>
       </div>
 
-      <div class="harvest-block" aria-label="Harvest-now, decrypt-later demonstration">
+      <div class="harvest-block" role="group" aria-label="Harvest-now, decrypt-later demonstration">
         <p class="harvest-block__label">Two sessions recorded by an adversary in 2025</p>
         <div class="harvest-grid">
           <article class="harvest-card harvest-card--classical" id="harvest-classical">
@@ -729,7 +729,7 @@ function renderTimeline(): HTMLElement {
                 <p class="harvest-card__title">Classical-only (X25519)</p>
               </div>
             </header>
-            <p class="harvest-card__hash mono-inline" aria-label="Ciphertext sample">${classicalHash}…</p>
+            <p class="harvest-card__hash mono-inline">${classicalHash}…</p>
             <p class="harvest-card__status" id="harvest-classical-status">still encrypted</p>
             <div class="harvest-card__crack" aria-hidden="true"></div>
           </article>
@@ -741,7 +741,7 @@ function renderTimeline(): HTMLElement {
                 <p class="harvest-card__title">Hybrid X25519MLKEM768</p>
               </div>
             </header>
-            <p class="harvest-card__hash mono-inline" aria-label="Ciphertext sample">${hybridHash}…</p>
+            <p class="harvest-card__hash mono-inline">${hybridHash}…</p>
             <p class="harvest-card__status" id="harvest-hybrid-status">still encrypted</p>
           </article>
         </div>
@@ -1201,8 +1201,12 @@ function initShortcuts(controller: PlaygroundController): void {
 
 export function mountApp(root: HTMLDivElement): void {
 	const shell = el('div', 'page-shell');
+	// The lab's own content is a <main> landmark; the footer stays a sibling of
+	// it (still inside .page-shell) so it keeps its implicit contentinfo role,
+	// which a <footer> nested inside <main> would lose.
+	const main = el('main', 'lab-main');
 	const { node: playground, controller } = renderPlayground();
-	shell.append(
+	main.append(
 		renderHero(),
 		renderNav(),
 		playground,
@@ -1212,8 +1216,8 @@ export function mountApp(root: HTMLDivElement): void {
 		renderDecision(),
 		renderDeployments(),
 		renderPitfalls(),
-		renderFooter(),
 	);
+	shell.append(main, renderFooter());
 	root.appendChild(shell);
 	initReveal(shell);
 	initShortcuts(controller);

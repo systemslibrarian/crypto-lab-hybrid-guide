@@ -14,7 +14,7 @@
   top: 8px;
   z-index: 20;
   margin: 18px 0 0;
-  padding: 8px 10px;
+  padding: 5px 10px;
   border: 1px solid var(--line);
   border-radius: 999px;
   background-color: color-mix(in oklab, var(--panel-strong) 90%, transparent);
@@ -32,7 +32,10 @@
   white-space: nowrap;
 }
 .section-nav__link {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  /* >=44px tap target (WCAG 2.5.5) */
+  min-height: 44px;
   padding: 8px 14px;
   border-radius: 999px;
   color: var(--ink-soft);
@@ -159,6 +162,9 @@
 
 /* --- scenario presets --- */
 .scenario-presets {
+  /* fieldsets default to min-inline-size: min-content; 0 keeps the button row
+     from pushing the page wider than the viewport on narrow screens */
+  min-width: 0;
   margin-top: 18px;
   padding: 14px 16px;
   border: 1px solid var(--line);
@@ -181,7 +187,7 @@
   align-items: center;
   gap: 8px;
   padding: 10px 14px;
-  min-height: 40px;
+  min-height: 44px;
   border-radius: 999px;
   border: 1px solid var(--line);
   background-color: var(--panel-strong);
@@ -216,7 +222,7 @@
 }
 .combiner-bar label { color: var(--ink-soft); font-size: 0.95rem; display: inline-flex; gap: 10px; align-items: center; }
 .combiner-bar select {
-  padding: 10px 1.8rem 10px 12px; min-height: 40px; border-radius: 12px; border: 1px solid var(--line);
+  padding: 10px 1.8rem 10px 12px; min-height: 44px; border-radius: 12px; border: 1px solid var(--line);
   background-color: var(--input-bg); color: var(--ink-strong); font-family: var(--mono);
   cursor: pointer;
   appearance: none;
@@ -387,6 +393,13 @@
   font-size: 0.72rem;
   cursor: pointer;
   transition: background 180ms ease, color 180ms ease, border-color 180ms ease;
+}
+/* The pip pill is ~22px tall; extend its hit area to >=44px vertically
+   (WCAG 2.5.5) without changing how it looks or crowding its neighbours. */
+.timeline-track__pip::after {
+  content: '';
+  position: absolute;
+  inset: -11px 0;
 }
 .timeline-track__pip:hover {
   background-color: var(--mono-block-bg);
@@ -616,7 +629,9 @@
 .code-panel > summary {
   list-style: none;
   cursor: pointer;
-  padding: 12px 18px;
+  /* padding lifts the row to a >=44px tap target */
+  padding: 13px 18px;
+  min-height: 44px;
   font-weight: 700;
   color: var(--ink-strong);
   user-select: none;
@@ -676,6 +691,7 @@
   font-size: 0.94rem;
 }
 .attack-result code {
+  overflow-wrap: anywhere;
   padding: 1px 6px;
   border-radius: 4px;
   background-color: var(--mono-block-bg);
@@ -1103,7 +1119,6 @@
   .hero-stat-grid dd { font-size: 0.78rem; }
 }
 
-/* BEGIN cl-hero standard — managed, keep in sync across fleet */
 .cl-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:clamp(1rem,4vw,3rem);flex-wrap:wrap;margin:clamp(1rem,3vw,2rem) 0 1.5rem;}
 .cl-hero-main{flex:1 1 22rem;min-width:min(100%,20rem);}
 .cl-hero-title{margin:0;font-size:clamp(1.6rem,3.8vw,2.7rem);font-weight:700;line-height:1.1;letter-spacing:.01em;color:var(--ink-strong);}
@@ -1112,5 +1127,4 @@
 .cl-hero-why{flex:0 1 min(40%,26rem);min-width:min(100%,15rem);border:1px solid var(--line);border-radius:10px;padding:.85rem 1.05rem;background:color-mix(in oklab,var(--accent) 6%,transparent);}
 .cl-hero-why-label{display:block;font-size:.68rem;font-weight:700;letter-spacing:.14em;color:var(--ink);}
 .cl-hero-why-text{margin:.35rem 0 0;font-size:.95rem;line-height:1.5;color:var(--ink);}
-@media (max-width:640px){.cl-hero{flex-direction:column;}.cl-hero-why{flex-basis:auto;width:100%;}}
-/* END cl-hero standard */
+@media (max-width:640px){.cl-hero{flex-direction:column;}.cl-hero-why{flex-basis:auto;width:100%;}.cl-hero-main{flex-basis:auto;min-width:0;}}
