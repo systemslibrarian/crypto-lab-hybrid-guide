@@ -189,7 +189,7 @@
   padding: 10px 14px;
   min-height: 44px;
   border-radius: 999px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   background-color: var(--panel-strong);
   color: var(--ink-strong);
   font-weight: 600;
@@ -222,7 +222,7 @@
 }
 .combiner-bar label { color: var(--ink-soft); font-size: 0.95rem; display: inline-flex; gap: 10px; align-items: center; }
 .combiner-bar select {
-  padding: 10px 1.8rem 10px 12px; min-height: 44px; border-radius: 12px; border: 1px solid var(--line);
+  padding: 10px 1.8rem 10px 12px; min-height: 44px; border-radius: 12px; border: 1px solid var(--line-strong);
   background-color: var(--input-bg); color: var(--ink-strong); font-family: var(--mono);
   cursor: pointer;
   appearance: none;
@@ -414,7 +414,7 @@
   margin: 12px 0 0;
   border-radius: 999px;
   background-color: var(--input-bg);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   cursor: pointer;
   outline: none;
 }
