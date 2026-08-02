@@ -71,14 +71,161 @@ export function bytesToHex(a: Uint8Array): string {
 }
 
 // --- attacker model --------------------------------------------------------
-// "Breaking" a component means the attacker learns its shared secret (we model
-// the *worst case*: they know it exactly, so from their view it is fixed/zeroed
-// as an unknown). Remaining attacker uncertainty = entropy of the secrets they
-// still do NOT know. Each unbroken 32-byte secret contributes 256 bits.
+// "Breaking" a component means the attacker learns its shared secret exactly
+// (worst case). Everything below is *run*, not asserted: the session encrypts a
+// known record under the derived key, and the attacker is handed only the
+// secrets they have broken plus the public transcript. They then derive
+// candidate session keys with the real combiner and try to decrypt the
+// intercepted record with each one. The verdict is whatever that decryption
+// actually did.
 
 export interface BreakState {
 	classicalBroken: boolean; // e.g. a future quantum computer breaks X25519
 	pqBroken: boolean; // e.g. cryptanalysis weakens ML-KEM
+}
+
+// The plaintext of the record the two parties exchange under the session key.
+// The attacker's goal is to produce this string.
+export const RECORD_PLAINTEXT = 'hybrid session record';
+
+export interface Session {
+	components: Components;
+	combiner: Combiner;
+	sessionKey: Uint8Array;
+	iv: Uint8Array;
+	record: Uint8Array; // AES-256-GCM( sessionKey, iv, RECORD_PLAINTEXT )
+}
+
+async function aesKey(raw: Uint8Array): Promise<CryptoKey> {
+	return crypto.subtle.importKey('raw', raw as BufferSource, 'AES-GCM', false, [
+		'encrypt',
+		'decrypt',
+	]);
+}
+
+// Derive the session key and encrypt one record under it. This record is what
+// the attacker intercepts, and decrypting it is the only definition of
+// "recovered the key" this lab uses.
+export async function openSession(
+	components: Components,
+	combiner: Combiner,
+): Promise<Session> {
+	const sessionKey = await deriveSessionKey(components, combiner);
+	const iv = randomBytes(12);
+	const ct = await crypto.subtle.encrypt(
+		{ name: 'AES-GCM', iv: iv as BufferSource },
+		await aesKey(sessionKey),
+		enc.encode(RECORD_PLAINTEXT) as BufferSource,
+	);
+	return { components, combiner, sessionKey, iv, record: new Uint8Array(ct) };
+}
+
+// Attempt to decrypt the intercepted record with a candidate key. Returns the
+// plaintext when the GCM tag verifies and null when it does not \u2014 no shortcuts,
+// the tag check is the oracle.
+export async function tryDecryptRecord(
+	session: Session,
+	candidateKey: Uint8Array,
+): Promise<string | null> {
+	try {
+		const pt = await crypto.subtle.decrypt(
+			{ name: 'AES-GCM', iv: session.iv as BufferSource },
+			await aesKey(candidateKey),
+			session.record as BufferSource,
+		);
+		return new TextDecoder().decode(pt);
+	} catch {
+		return null;
+	}
+}
+
+export type ComponentName = 'classical' | 'pq';
+
+export interface RecoveryResult {
+	attempts: number; // candidate keys actually derived and tested
+	successes: number; // candidates whose key decrypted the record
+	recovered: boolean; // successes > 0
+	recoveredPlaintext: string | null;
+	unknownComponents: ComponentName[]; // secrets withheld from the attacker
+	unknownBits: number; // measured: 8 x withheld secret bytes
+	bestBytesMatched: number; // best candidate/true key agreement, of 32
+	firstCandidateKeyHex: string;
+	trueKeyKnownToAttacker: boolean; // candidate key equalled the real key
+}
+
+function bytesMatched(a: Uint8Array, b: Uint8Array): number {
+	let n = 0;
+	for (let i = 0; i < Math.min(a.length, b.length); i++) if (a[i] === b[i]) n++;
+	return n;
+}
+
+// Run the key-recovery attack. The attacker gets the transcript binding (public)
+// and the shared secrets of whichever components are broken; for every component
+// still standing they must guess, so we actually draw a guess and derive a real
+// candidate session key from it, then test it against the intercepted record.
+//
+// This runs at REAL parameters: an unbroken component contributes a 256-bit
+// secret, so a wrong guess is wrong with probability 1 - 2^-256. The failure is
+// therefore observed, not stipulated.
+export async function attemptKeyRecovery(
+	session: Session,
+	state: BreakState,
+	attempts = 16,
+): Promise<RecoveryResult> {
+	const truth = session.components;
+	const unknownComponents: ComponentName[] = [];
+	if (!state.classicalBroken) unknownComponents.push('classical');
+	if (!state.pqBroken) unknownComponents.push('pq');
+
+	// Uncertainty is counted off the actual secrets withheld from the attacker,
+	// not off the checkbox states.
+	const unknownBits = unknownComponents.reduce(
+		(bits, name) => bits + truth[name].length * 8,
+		0,
+	);
+
+	let successes = 0;
+	let recoveredPlaintext: string | null = null;
+	let bestBytesMatched = 0;
+	let firstCandidateKeyHex = '';
+	let trueKeyKnownToAttacker = false;
+	let performed = 0;
+
+	// With nothing withheld the attacker has a single deterministic candidate;
+	// one derivation settles it. Otherwise they take repeated shots in the dark.
+	const budget = unknownComponents.length === 0 ? 1 : attempts;
+
+	for (let i = 0; i < budget; i++) {
+		const guess: Components = {
+			classical: state.classicalBroken ? truth.classical : randomBytes(truth.classical.length),
+			pq: state.pqBroken ? truth.pq : randomBytes(truth.pq.length),
+			// The transcript binding is public \u2014 the attacker always has it.
+			ctBinding: truth.ctBinding,
+		};
+		const candidate = await deriveSessionKey(guess, session.combiner);
+		performed++;
+		if (i === 0) firstCandidateKeyHex = bytesToHex(candidate);
+		bestBytesMatched = Math.max(bestBytesMatched, bytesMatched(candidate, session.sessionKey));
+		if (bytesToHex(candidate) === bytesToHex(session.sessionKey)) trueKeyKnownToAttacker = true;
+		const pt = await tryDecryptRecord(session, candidate);
+		if (pt !== null) {
+			successes++;
+			recoveredPlaintext = pt;
+			break;
+		}
+	}
+
+	return {
+		attempts: performed,
+		successes,
+		recovered: successes > 0,
+		recoveredPlaintext,
+		unknownComponents,
+		unknownBits,
+		bestBytesMatched,
+		firstCandidateKeyHex,
+		trueKeyKnownToAttacker,
+	};
 }
 
 export interface Verdict {
@@ -86,44 +233,57 @@ export interface Verdict {
 	secure: boolean;
 	headline: string;
 	detail: string;
+	measurement: string;
 }
 
-export function assess(state: BreakState, combiner: Combiner): Verdict {
-	const unbroken =
-		(state.classicalBroken ? 0 : 1) + (state.pqBroken ? 0 : 1);
-	const remainingBits = unbroken * 256;
+// Turn a completed recovery run into the on-screen verdict. Every claim here is
+// read off the run: `secure` is "the attacker's derived keys did not decrypt the
+// record", and `remainingBits` is the entropy actually withheld from them.
+export function assess(recovery: RecoveryResult, combiner: Combiner): Verdict {
+	const holding = recovery.unknownComponents;
+	// Secure means two things both observed in the run: the attacker's derived
+	// keys failed to open the record, and there was real entropy they had to
+	// guess. Neither is read off a checkbox.
+	const secure = !recovery.recovered && holding.length > 0;
+	const remainingBits = recovery.unknownBits;
 
-	// A sound combiner is secure if AT LEAST ONE component is unbroken.
-	// The naive concatenation combiner is also secure in this simple model
-	// (SHA-256 over both), but we flag its real-world caveat separately.
-	const secure = remainingBits > 0;
+	const measurement = recovery.recovered
+		? `attacker: ${recovery.attempts} derivation${recovery.attempts === 1 ? '' : 's'} \u00b7 record decrypted \u00b7 key matched 32/32 bytes`
+		: `attacker: ${recovery.attempts} derivations \u00b7 0 decrypted the record \u00b7 best candidate matched ${recovery.bestBytesMatched}/32 bytes`;
 
 	let headline: string;
 	let detail: string;
-	if (!state.classicalBroken && !state.pqBroken) {
+	if (recovery.recovered) {
+		headline = 'Broken \u2014 both halves down';
+		detail = `The attacker re-derived the session key and the intercepted record decrypted to \u201c${recovery.recoveredPlaintext}\u201d. No combiner can save you here; the whole point of a hybrid is that this should be far harder than breaking either one alone.`;
+	} else if (holding.length === 0) {
+		// Every secret was handed over yet the record survived: the derivation
+		// and the record disagree, which is a fault in the lab, not a hedge.
+		headline = 'Inconclusive \u2014 derivation mismatch';
+		detail =
+			'The attacker was given every component secret but their derived key did not open the intercepted record. That is not a security property; it means the session key and the record were produced from different inputs.';
+	} else if (holding.length === 2) {
 		headline = 'Fully secure';
 		detail =
 			'Neither component is broken. The session key has the full strength of both halves \u2014 this is the normal operating state.';
-	} else if (state.classicalBroken && !state.pqBroken) {
+	} else if (holding.includes('pq')) {
 		headline = 'Still secure (PQ holds)';
 		detail =
-			'A quantum computer has broken the classical X25519 half, but ML-KEM is intact. The session key is still unpredictable \u2014 this is exactly the future scenario hybrids are built for.';
-	} else if (!state.classicalBroken && state.pqBroken) {
+			'A quantum computer has broken the classical X25519 half, but ML-KEM is intact. The attacker still had to guess the surviving secret, and the record stayed encrypted \u2014 this is exactly the future scenario hybrids are built for.';
+	} else {
 		headline = 'Still secure (classical holds)';
 		detail =
-			'Cryptanalysis has weakened the post-quantum half, but classical X25519 is intact. The session key is still safe today \u2014 this is the hedge against a young PQC scheme being broken.';
-	} else {
-		headline = 'Broken \u2014 both halves down';
-		detail =
-			'Both components are broken simultaneously. No combiner can save you here; the whole point of a hybrid is that this should be far harder than breaking either one alone.';
+			'Cryptanalysis has weakened the post-quantum half, but classical X25519 is intact. The attacker still had to guess the surviving secret, and the record stayed encrypted \u2014 this is the hedge against a young PQC scheme being broken.';
 	}
+
+	detail += ` Measured this run \u2014 ${measurement}.`;
 
 	if (combiner === 'naive' && secure) {
 		detail +=
 			' Note: simple concatenation works here, but a robust combiner also binds the ciphertexts/transcript to prevent re-encapsulation and related attacks \u2014 which is why X-Wing uses a structured construction.';
 	}
 
-	return { remainingBits, secure, headline, detail };
+	return { remainingBits, secure, headline, detail, measurement };
 }
 
 // --- re-encapsulation / transcript-binding demonstration -------------------

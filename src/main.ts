@@ -1,6 +1,13 @@
 import './style.css';
 import './extra.css';
-import { freshComponents, deriveSessionKey, assess, bytesToHex } from './engine.ts';
+import {
+	freshComponents,
+	deriveSessionKey,
+	openSession,
+	attemptKeyRecovery,
+	assess,
+	bytesToHex,
+} from './engine.ts';
 import { mountApp } from './ui.ts';
 
 (async function selfTest() {
@@ -9,14 +16,19 @@ import { mountApp } from './ui.ts';
 	const key = await deriveSessionKey(c, 'xwing');
 	console.log('Components: X25519 + ML-KEM-768 (simulated 32-byte secrets)');
 	console.log('Session key (X-Wing-style):', bytesToHex(key).slice(0, 32) + '…');
+	// Each line below is a real key-recovery run against a real AES-GCM record.
+	const session = await openSession(c, 'xwing');
 	for (const [cb, pb, label] of [
 		[false, false, 'both intact'],
 		[true, false, 'classical broken'],
 		[false, true, 'PQ broken'],
 		[true, true, 'both broken'],
 	] as [boolean, boolean, string][]) {
-		const v = assess({ classicalBroken: cb, pqBroken: pb }, 'xwing');
-		console.log(`  ${label}: ${v.remainingBits} bits, secure=${v.secure}`);
+		const r = await attemptKeyRecovery(session, { classicalBroken: cb, pqBroken: pb });
+		const v = assess(r, 'xwing');
+		console.log(
+			`  ${label}: ${v.remainingBits} bits, secure=${v.secure}, record recovered=${r.recovered}`,
+		);
 	}
 	console.groupEnd();
 })();

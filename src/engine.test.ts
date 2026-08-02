@@ -1,13 +1,18 @@
 import { describe, it, expect } from 'vitest';
 import {
 	assess,
+	attemptKeyRecovery,
 	bytesToHex,
 	deriveSessionKey,
 	freshComponents,
+	openSession,
 	randomBytes,
 	reencapPair,
 	reencapsulationAttack,
 	sha256,
+	tryDecryptRecord,
+	RECORD_PLAINTEXT,
+	type Combiner,
 	type Components,
 } from './engine.ts';
 
@@ -143,49 +148,118 @@ describe('deriveSessionKey', () => {
 	});
 });
 
-describe('assess verdicts (X-Wing combiner)', () => {
-	it('both halves intact ⇒ 512 bits, secure, "Fully secure"', () => {
-		const v = assess({ classicalBroken: false, pqBroken: false }, 'xwing');
-		expect(v.remainingBits).toBe(512);
-		expect(v.secure).toBe(true);
-		expect(v.headline).toBe('Fully secure');
+// These verdicts used to be selected from the two break flags (remainingBits =
+// unbroken * 256, headline chosen by an if-chain over the checkbox states).
+// They are now produced by running a real key-recovery attack against a real
+// AES-256-GCM record: `secure` is "the attacker's derived keys failed to
+// decrypt", and every test below drives the attack rather than the flags.
+describe('key recovery is really attempted', () => {
+	async function run(classicalBroken: boolean, pqBroken: boolean, combiner: Combiner = 'xwing') {
+		const session = await openSession(freshComponents(), combiner);
+		const recovery = await attemptKeyRecovery(session, { classicalBroken, pqBroken });
+		return { session, recovery, verdict: assess(recovery, combiner) };
+	}
+
+	it('records the plaintext under the derived key, and the honest key opens it', async () => {
+		const session = await openSession(freshComponents(), 'xwing');
+		expect(await tryDecryptRecord(session, session.sessionKey)).toBe(RECORD_PLAINTEXT);
 	});
 
-	it('classical broken only ⇒ 256 bits, still secure, PQ-holds headline', () => {
-		const v = assess({ classicalBroken: true, pqBroken: false }, 'xwing');
-		expect(v.remainingBits).toBe(256);
-		expect(v.secure).toBe(true);
-		expect(v.headline).toBe('Still secure (PQ holds)');
+	it('a wrong key does not open the record (the GCM tag is the oracle)', async () => {
+		const session = await openSession(freshComponents(), 'xwing');
+		expect(await tryDecryptRecord(session, randomBytes(32))).toBeNull();
 	});
 
-	it('PQ broken only ⇒ 256 bits, still secure, classical-holds headline', () => {
-		const v = assess({ classicalBroken: false, pqBroken: true }, 'xwing');
-		expect(v.remainingBits).toBe(256);
-		expect(v.secure).toBe(true);
-		expect(v.headline).toBe('Still secure (classical holds)');
+	it('both halves intact ⇒ the attack runs, fails, and the verdict is secure', async () => {
+		const { recovery, verdict } = await run(false, false);
+		expect(recovery.attempts).toBeGreaterThan(1);
+		expect(recovery.successes).toBe(0);
+		expect(recovery.recovered).toBe(false);
+		expect(recovery.unknownComponents).toEqual(['classical', 'pq']);
+		expect(verdict.remainingBits).toBe(512);
+		expect(verdict.secure).toBe(true);
+		expect(verdict.headline).toBe('Fully secure');
 	});
 
-	it('both broken ⇒ 0 bits, insecure, broken headline', () => {
-		const v = assess({ classicalBroken: true, pqBroken: true }, 'xwing');
-		expect(v.remainingBits).toBe(0);
-		expect(v.secure).toBe(false);
-		expect(v.headline.startsWith('Broken')).toBe(true);
+	it('classical broken ⇒ the attacker holds that secret, still cannot decrypt', async () => {
+		const { recovery, verdict } = await run(true, false);
+		expect(recovery.successes).toBe(0);
+		expect(recovery.recoveredPlaintext).toBeNull();
+		expect(recovery.unknownComponents).toEqual(['pq']);
+		expect(verdict.remainingBits).toBe(256);
+		expect(verdict.secure).toBe(true);
+		expect(verdict.headline).toBe('Still secure (PQ holds)');
+	});
+
+	it('PQ broken ⇒ the attacker holds that secret, still cannot decrypt', async () => {
+		const { recovery, verdict } = await run(false, true);
+		expect(recovery.successes).toBe(0);
+		expect(recovery.unknownComponents).toEqual(['classical']);
+		expect(verdict.remainingBits).toBe(256);
+		expect(verdict.secure).toBe(true);
+		expect(verdict.headline).toBe('Still secure (classical holds)');
+	});
+
+	// The negative path: with nothing withheld the attack must actually work,
+	// end to end, and hand back the plaintext. If this ever stops succeeding the
+	// "still secure" results above would be worthless.
+	it('both broken ⇒ the attack SUCCEEDS: one derivation, record decrypted', async () => {
+		const { session, recovery, verdict } = await run(true, true);
+		expect(recovery.attempts).toBe(1);
+		expect(recovery.successes).toBe(1);
+		expect(recovery.recovered).toBe(true);
+		expect(recovery.recoveredPlaintext).toBe(RECORD_PLAINTEXT);
+		expect(recovery.trueKeyKnownToAttacker).toBe(true);
+		expect(recovery.firstCandidateKeyHex).toBe(bytesToHex(session.sessionKey));
+		expect(recovery.bestBytesMatched).toBe(32);
+		expect(verdict.remainingBits).toBe(0);
+		expect(verdict.secure).toBe(false);
+		expect(verdict.headline).toBe('Broken — both halves down');
+	});
+
+	it('the surviving half really is guessed, not assumed: candidates differ each attempt', async () => {
+		const session = await openSession(freshComponents(), 'xwing');
+		const a = await attemptKeyRecovery(session, { classicalBroken: true, pqBroken: false });
+		const b = await attemptKeyRecovery(session, { classicalBroken: true, pqBroken: false });
+		expect(a.firstCandidateKeyHex).not.toBe(b.firstCandidateKeyHex);
+		expect(a.firstCandidateKeyHex).not.toBe(bytesToHex(session.sessionKey));
+	});
+
+	it('holds for the naive combiner too — the attack is combiner-agnostic', async () => {
+		const secure = await run(true, false, 'naive');
+		expect(secure.recovery.recovered).toBe(false);
+		expect(secure.verdict.secure).toBe(true);
+		const broken = await run(true, true, 'naive');
+		expect(broken.recovery.recovered).toBe(true);
+		expect(broken.verdict.secure).toBe(false);
+	});
+
+	it('the measurement string reports what the run did', async () => {
+		const secure = await run(false, false);
+		expect(secure.verdict.measurement).toMatch(/0 decrypted the record/);
+		const broken = await run(true, true);
+		expect(broken.verdict.measurement).toMatch(/record decrypted/);
 	});
 });
 
 describe('assess naive combiner caveat', () => {
-	it('appends a robust-combiner note when naive is selected and the verdict is still secure', () => {
-		const v = assess({ classicalBroken: false, pqBroken: false }, 'naive');
+	async function verdictFor(classicalBroken: boolean, pqBroken: boolean, combiner: Combiner) {
+		const session = await openSession(freshComponents(), combiner);
+		return assess(await attemptKeyRecovery(session, { classicalBroken, pqBroken }), combiner);
+	}
+
+	it('appends a robust-combiner note when naive is selected and the verdict is still secure', async () => {
+		const v = await verdictFor(false, false, 'naive');
 		expect(v.detail).toMatch(/robust combiner|re-encapsulation/);
 	});
 
-	it('does NOT append the naive caveat for the X-Wing combiner', () => {
-		const v = assess({ classicalBroken: false, pqBroken: false }, 'xwing');
+	it('does NOT append the naive caveat for the X-Wing combiner', async () => {
+		const v = await verdictFor(false, false, 'xwing');
 		expect(v.detail).not.toMatch(/robust combiner/);
 	});
 
-	it('does NOT append the naive caveat when both halves are broken (already insecure)', () => {
-		const v = assess({ classicalBroken: true, pqBroken: true }, 'naive');
+	it('does NOT append the naive caveat when both halves are broken (already insecure)', async () => {
+		const v = await verdictFor(true, true, 'naive');
 		expect(v.detail).not.toMatch(/robust combiner/);
 	});
 });

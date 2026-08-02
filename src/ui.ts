@@ -2,11 +2,14 @@
 import {
 	freshComponents,
 	deriveSessionKey,
+	openSession,
+	attemptKeyRecovery,
 	assess,
 	bytesToHex,
 	reencapPair,
 	reencapsulationAttack,
 	type Components,
+	type ComponentName,
 	type Combiner,
 	type BreakState,
 } from './engine.ts';
@@ -185,7 +188,9 @@ function renderPlayground(): { node: HTMLElement; controller: PlaygroundControll
         <h2 id="playground-heading" tabindex="-1">The Combiner</h2>
         <p class="section-footnote">
           Two component shared secrets feed a combiner that derives one session key (real SHA-256
-          via Web Crypto). Break a component to see whether the session key stays unpredictable.
+          via Web Crypto), which encrypts one record with AES-256-GCM. Break a component and the
+          attacker is handed that secret, derives candidate keys, and actually tries to decrypt the
+          record — the verdict below is whatever those attempts did.
         </p>
       </div>
       <kbd class="kbd-hint" title="Keyboard shortcuts">
@@ -335,6 +340,7 @@ function renderPlayground(): { node: HTMLElement; controller: PlaygroundControll
           <div class="entropy-fill" id="entropy-fill" style="width:0%"></div>
         </div>
         <p class="mono-inline mono-inline--meter" id="entropy-val">—</p>
+        <p class="mono-inline mono-inline--meter" id="recovery-line" data-testid="recovery-line">—</p>
       </div>
 
       <p class="panel-copy" id="verdict-detail"></p>
@@ -367,6 +373,8 @@ function renderPlayground(): { node: HTMLElement; controller: PlaygroundControll
 
 	let comps: Components = freshComponents();
 	let lastHeadline = '';
+	// Each refresh runs a real attack (async); a newer run must win the paint.
+	let refreshSeq = 0;
 
 	const SNIPPET_NAIVE = `// Naive concatenation combiner
 const ssClassical = crypto.getRandomValues(new Uint8Array(32));
@@ -436,16 +444,16 @@ const sessionKey = new Uint8Array(
 		if (pqState) pqState.textContent = state.pqBroken ? 'broken' : 'intact';
 	}
 
-	function paintBitGrids(state: BreakState): void {
-		const classical = $('bitgrid-classical');
-		const pq = $('bitgrid-pq');
-		classical.classList.toggle('is-broken', state.classicalBroken);
-		pq.classList.toggle('is-broken', state.pqBroken);
-		const count = (state.classicalBroken ? 0 : 256) + (state.pqBroken ? 0 : 256);
-		$('bitgrid-count').textContent = ` · ${count} / 512 bits unknown`;
+	// Which halves the grids show as unknown comes from the secrets the attack
+	// actually had to guess, and the bit count from the entropy it measured.
+	function paintBitGrids(unknown: ComponentName[], remainingBits: number): void {
+		$('bitgrid-classical').classList.toggle('is-broken', !unknown.includes('classical'));
+		$('bitgrid-pq').classList.toggle('is-broken', !unknown.includes('pq'));
+		$('bitgrid-count').textContent = ` · ${remainingBits} / 512 bits unknown`;
 	}
 
 	async function refresh(): Promise<void> {
+		const seq = ++refreshSeq;
 		const combiner = combinerSel.value as Combiner;
 		const state: BreakState = {
 			classicalBroken: breakClassical.checked,
@@ -457,10 +465,16 @@ const sessionKey = new Uint8Array(
 		$('card-classical').classList.toggle('is-broken', state.classicalBroken);
 		$('card-pq').classList.toggle('is-broken', state.pqBroken);
 
-		const key = await deriveSessionKey(comps, combiner);
-		$('session-key').textContent = bytesToHex(key);
+		// Open a real session (key + AES-GCM record), then let the attacker run.
+		const session = await openSession(comps, combiner);
+		const recovery = await attemptKeyRecovery(session, state);
+		// A later toggle already superseded this run; do not paint stale results.
+		if (seq !== refreshSeq) return;
 
-		const v = assess(state, combiner);
+		$('session-key').textContent = bytesToHex(session.sessionKey);
+
+		const v = assess(recovery, combiner);
+		$('recovery-line').textContent = v.measurement;
 		const pct = (v.remainingBits / 512) * 100;
 		const fill = $('entropy-fill');
 		fill.style.width = `${pct}%`;
@@ -478,7 +492,7 @@ const sessionKey = new Uint8Array(
 		$('verdict-detail').innerHTML = v.detail;
 
 		paintDiagram(state);
-		paintBitGrids(state);
+		paintBitGrids(recovery.unknownComponents, v.remainingBits);
 		updateFormula(combiner);
 
 		if (v.headline !== lastHeadline) {
