@@ -285,7 +285,7 @@ function renderPlayground(): { node: HTMLElement; controller: PlaygroundControll
 
     <details class="code-panel">
       <summary>Show the Web Crypto snippet</summary>
-      <pre class="code-block"><code id="code-block"></code></pre>
+      <pre class="code-block" tabindex="0"><code id="code-block"></code></pre>
       <div class="code-panel__actions">
         <button type="button" class="ghost-button ghost-button--compact" id="copy-code">Copy snippet</button>
         <span class="code-panel__hint">Pure browser primitives — no dependencies.</span>

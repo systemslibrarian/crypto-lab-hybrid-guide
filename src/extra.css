@@ -144,7 +144,18 @@
 .comp-card--classical { border-left: 4px solid var(--accent); }
 .comp-card--pq { border-left: 4px solid var(--accent-3); }
 .comp-card.is-broken { border-color: var(--accent-2); }
-.comp-card.is-broken .comp-secret { text-decoration: line-through; color: var(--accent-2); }
+/* The secret sits on a .mono-inline chip, which is dark in BOTH themes
+   (--mono-block-bg). Light theme's --accent-2 (#b03333) is a dark red tuned for
+   light surfaces and reads at 2.8:1 on that chip; lighten it so the broken-state
+   red clears AA on the dark chip in both themes. */
+/* The secret sits on a .mono-inline chip, which is dark in BOTH themes
+   (--mono-block-bg). Light theme's --accent-2 (#b03333) is a dark red tuned for
+   light surfaces and reads at 2.8:1 on that chip; lighten it so the broken-state
+   red clears AA on the dark chip in both themes. */
+.comp-card.is-broken .comp-secret {
+  text-decoration: line-through;
+  color: color-mix(in oklab, var(--accent-2), white 45%);
+}
 .comp-label { margin: 0 0 10px; font-size: 0.82rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); font-weight: 700; }
 .comp-secret { margin: 0 0 14px; word-break: break-all; }
 .break-toggle {
@@ -606,7 +617,9 @@
 }
 .harvest-card.is-cracked .harvest-card__hash {
   text-decoration: line-through;
-  color: var(--accent-2);
+  /* Same dark .mono-inline chip as the combiner secrets: lighten --accent-2 so
+     the cracked red clears AA on it in both themes (was 2.79:1 in light). */
+  color: color-mix(in oklab, var(--accent-2), white 45%);
 }
 .harvest-card.is-cracked .harvest-card__status {
   color: var(--accent-2);

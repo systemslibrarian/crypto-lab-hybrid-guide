@@ -282,7 +282,11 @@ button:disabled {
   font-size: 0.82rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--metric-muted);
+  /* This label sits on the light session panel, not on a dark metric block, so
+     it must use the panel-relative muted ink (--ink-soft). --metric-muted is a
+     near-white tuned for the dark --metric-bg and rendered light-on-light here
+     in the light theme (1.08:1). */
+  color: var(--ink-soft);
 }
 
 .hero-metric-value {
