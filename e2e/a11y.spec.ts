@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { NARROW, boot, scan, settle } from './gate';
+import { NARROW, boot, expectBaselineNotStale, scan, settle } from './gate';
 
 /**
  * WCAG regression gate.
@@ -149,6 +149,19 @@ for (const theme of THEMES) {
       await page.setViewportSize(NARROW);
       await settle(page);
       await scan(page, `${theme} / ${state.label} / ${NARROW.width}px`);
+
+      // The baseline's third rule: a listed finding that no longer appears
+      // fails until its entry is deleted, so a fixed defect cannot linger as a
+      // permanent exemption. `expectBaselineNotStale` was exported and never
+      // called, so that rule had never run and the file could only grow.
+      //
+      // Per state rather than once at the end, because `nonTextSeen` is module
+      // state and `fullyParallel` gives each test its own worker — a single
+      // trailing test would see only its own worker's set. Every baselined
+      // selector is page chrome that every state renders, so each test's own
+      // two scans cover the whole baseline; each was run in isolation to prove
+      // it rather than assuming it.
+      expectBaselineNotStale();
     });
   }
 }
