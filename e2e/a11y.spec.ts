@@ -20,7 +20,7 @@ import { NARROW, boot, expectBaselineNotStale, scan, settle } from './gate';
  * page in two themes at one viewport.
  */
 
-const THEMES = ['dark', 'light'] as const;
+const THEMES = ['dark'] as const;
 const RECOVERED_PLAINTEXT = 'hybrid session record';
 
 /**

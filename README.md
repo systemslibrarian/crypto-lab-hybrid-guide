@@ -55,7 +55,7 @@ npm run dev
 
 ## Tech
 
-Vite + TypeScript, zero runtime dependencies. `src/engine.ts` implements the KEM combiners (real SHA-256 via Web Crypto) and the break-state assessment; `src/data.ts` holds the decision guide, deployments, and pitfalls; `src/ui.ts` is the interactive playground. Dark mode by default with a persisted theme toggle.
+Vite + TypeScript, zero runtime dependencies. `src/engine.ts` implements the KEM combiners (real SHA-256 via Web Crypto) and the break-state assessment; `src/data.ts` holds the decision guide, deployments, and pitfalls; `src/ui.ts` is the interactive playground. Dark mode throughout.
 
 ```bash
 npm install
