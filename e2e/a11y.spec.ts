@@ -9,10 +9,10 @@ import { NARROW, boot, expectBaselineNotStale, scan, settle } from './gate';
  * for the three rules this file obeys — nothing injected, content asserted
  * before every scan, and `violations` treated as one oracle among five.
  *
- * The page is scanned in both themes, in states a visitor can actually reach,
+ * The page is scanned in the configured dark theme, in states a visitor can actually reach,
  * at a 1280px desktop viewport and at a 380px phone one. Almost none of the
- * interesting rendering is the first-paint one: the "Broken — both halves down"
- * verdict that prints the recovered plaintext, the re-encapsulation attack
+ * interesting rendering is the first-paint one: the "Record recovered"
+ * verdict that prints the recovered plaintext, the transcript-binding experiment
  * result that ships `[hidden]`, the Web Crypto snippet inside a closed
  * `<details>`, the cracked harvest card and the filled benchmark tiles are all
  * downstream of a click or a drag. The previous gate reached none of them: it
@@ -37,12 +37,12 @@ const STATES: State[] = [
   {
     // The default mount. Both halves intact, the attack ran and failed, the
     // re-encapsulation result and the code snippet are still closed/hidden.
-    label: 'first paint / fully secure',
+    label: 'first paint / finite guesses',
     drive: async (page) => {
-      await expect(page.locator('#verdict-chip')).toHaveText('Fully secure');
+      await expect(page.locator('#verdict-chip')).toHaveText('Not recovered in this run');
       await expect(page.locator('#verdict-chip')).toHaveClass(/vs-chip--ok/);
       await expect(page.locator('#recovery-line')).toContainText('0 decrypted the record');
-      await expect(page.locator('#entropy-val')).toHaveText('512 bits to guess');
+      await expect(page.locator('#entropy-val')).toHaveText('64 input bytes withheld · key-space cap 256 bits');
     },
   },
   {
@@ -52,7 +52,7 @@ const STATES: State[] = [
     label: 'both broken / recovered plaintext',
     drive: async (page) => {
       await page.locator('.preset-button[data-scenario="break-both"]').click();
-      await expect(page.locator('#verdict-chip')).toHaveText('Broken — both halves down');
+      await expect(page.locator('#verdict-chip')).toHaveText('Record recovered');
       await expect(page.locator('#verdict-chip')).toHaveClass(/vs-chip--bad/);
       await expect(page.locator('#recovery-line')).toContainText('record decrypted');
       await expect(page.locator('#verdict-detail')).toContainText(RECOVERED_PLAINTEXT);
@@ -61,18 +61,18 @@ const STATES: State[] = [
     },
   },
   {
-    // The re-encapsulation attack result is `hidden` until run. The naive
+    // The transcript-binding experiment result is `hidden` until run. The naive
     // combiner makes the two transcripts collide: the panel opens in its `bad`
     // tone with the colliding keys. The old gate stripped [hidden] and scanned
     // this empty; here it carries the content a real run produces.
-    label: 'reencap attack succeeds / naive combiner',
+    label: 'equal keys / unbound hash',
     drive: async (page) => {
       await page.locator('#combiner').selectOption('naive');
       await page.locator('#run-attack').click();
       const result = page.locator('#attack-result');
       await expect(result).toBeVisible();
       await expect(result).toHaveAttribute('data-tone', 'bad');
-      await expect(result).toContainText('Attack succeeds');
+      await expect(result).toContainText('Keys match in this experiment');
       await expect(result.locator('code').first()).toBeVisible();
       // The attack also fires a toast that fades to opacity 0 before removing
       // itself; scan the settled state, not a transient mid-fade frame.
@@ -81,14 +81,14 @@ const STATES: State[] = [
   },
   {
     // The same panel, opposite verdict and palette: the bound X-Wing combiner
-    // makes the keys differ, so the attack fails in the `ok` tone.
-    label: 'reencap attack fails / bound combiner',
+    // makes the chosen keys differ, so the observed result uses the `ok` tone.
+    label: 'different keys / custom bound hash',
     drive: async (page) => {
       await page.locator('#run-attack').click();
       const result = page.locator('#attack-result');
       await expect(result).toBeVisible();
       await expect(result).toHaveAttribute('data-tone', 'ok');
-      await expect(result).toContainText('Attack fails');
+      await expect(result).toContainText('Keys differ in this experiment');
       await expect(page.locator('.toast')).toHaveCount(0);
     },
   },

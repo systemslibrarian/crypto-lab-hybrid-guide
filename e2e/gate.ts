@@ -17,7 +17,7 @@ export const NARROW = { width: 380, height: 800 };
  *  1. NOTHING IS INJECTED INTO THE PAGE BEFORE A SCAN. The version of this gate
  *     this file replaces force-opened every <details>, stripped `[hidden]` and
  *     inline `display:none` off every element, and forced `.reveal` sections
- *     visible — scanning the code panel, the re-encapsulation attack result and
+ *     visible — scanning the code panel, the transcript-binding experiment result and
  *     the fade-in sections all at once, in a state no visitor can produce and
  *     with none of them carrying the content a click would put there. Every one
  *     of those is reachable by driving the page, and this gate reaches them that
@@ -29,7 +29,7 @@ export const NARROW = { width: 380, height: 800 };
  *     past first paint. axe over an empty container passes having checked
  *     nothing. The whole lab is injected by JS into an empty `#app`, and its
  *     most interesting renderings — the recovered-plaintext "broken" verdict,
- *     the re-encapsulation attack result, the cracked harvest card, the filled
+ *     the transcript-binding experiment result, the cracked harvest card, the filled
  *     benchmark tiles — are all downstream of a click or a drag.
  *
  *  3. `violations` IS NOT THE WHOLE ORACLE. See `scan`.
@@ -130,7 +130,7 @@ export async function boot(page: Page, theme: 'dark' | 'light'): Promise<void> {
   await expect(page.locator('.bitgrid-cell')).toHaveCount(512);
   // The combiner refresh is async (opens a real AES-GCM session, runs a real
   // key-recovery attempt); the verdict text is the signal it has painted.
-  await expect(page.locator('#verdict-chip')).toHaveText('Fully secure');
+  await expect(page.locator('#verdict-chip')).toHaveText('Not recovered in this run');
 
   await settle(page);
   await expectNotBlank(page, `${theme} first paint`);
