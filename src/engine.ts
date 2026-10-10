@@ -9,8 +9,8 @@
 //
 // The teaching point: if an attacker breaks ONE component (learns or fixes its
 // shared secret), a sound combiner keeps the session key unpredictable as long
-// as the OTHER secret is still secret. We demonstrate by zeroing a component
-// and measuring how much entropy the attacker would still have to guess.
+// as the OTHER secret is still secret. We illustrate by revealing a component
+// and counting withheld input bytes separately from observed recovery attempts.
 
 export type Combiner = 'naive' | 'xwing';
 
@@ -147,7 +147,8 @@ export interface RecoveryResult {
 	recovered: boolean; // successes > 0
 	recoveredPlaintext: string | null;
 	unknownComponents: ComponentName[]; // secrets withheld from the attacker
-	unknownBits: number; // measured: 8 x withheld secret bytes
+	withheldBytes: number; // input bytes withheld in this random-secret model
+	keyBytes: number; // actual derived output width, not a security estimate
 	bestBytesMatched: number; // best candidate/true key agreement, of 32
 	firstCandidateKeyHex: string;
 	trueKeyKnownToAttacker: boolean; // candidate key equalled the real key
@@ -164,23 +165,22 @@ function bytesMatched(a: Uint8Array, b: Uint8Array): number {
 // still standing they must guess, so we actually draw a guess and derive a real
 // candidate session key from it, then test it against the intercepted record.
 //
-// This runs at REAL parameters: an unbroken component contributes a 256-bit
-// secret, so a wrong guess is wrong with probability 1 - 2^-256. The failure is
-// therefore observed, not stipulated.
+// These are uniformly random simulated secrets, not real KEM parameters.
+// Failed finite guesses are observations, not a measurement of security.
 export async function attemptKeyRecovery(
 	session: Session,
 	state: BreakState,
 	attempts = 16,
 ): Promise<RecoveryResult> {
+	if (!Number.isSafeInteger(attempts) || attempts < 0) throw new RangeError('Attempt budget must be a nonnegative safe integer.');
 	const truth = session.components;
 	const unknownComponents: ComponentName[] = [];
 	if (!state.classicalBroken) unknownComponents.push('classical');
 	if (!state.pqBroken) unknownComponents.push('pq');
 
-	// Uncertainty is counted off the actual secrets withheld from the attacker,
-	// not off the checkbox states.
-	const unknownBits = unknownComponents.reduce(
-		(bits, name) => bits + truth[name].length * 8,
+	// Count withheld bytes; neither input width nor finite failures measure security.
+	const withheldBytes = unknownComponents.reduce(
+		(bytes, name) => bytes + truth[name].length,
 		0,
 	);
 
@@ -221,7 +221,8 @@ export async function attemptKeyRecovery(
 		recovered: successes > 0,
 		recoveredPlaintext,
 		unknownComponents,
-		unknownBits,
+		withheldBytes,
+		keyBytes: session.sessionKey.length,
 		bestBytesMatched,
 		firstCandidateKeyHex,
 		trueKeyKnownToAttacker,
@@ -229,101 +230,64 @@ export async function attemptKeyRecovery(
 }
 
 export interface Verdict {
-	remainingBits: number;
-	secure: boolean;
+	withheldBytes: number;
+	keySpaceCapBits: number; // output-width upper bound, never a strength guarantee
+	observedNoRecovery: boolean;
 	headline: string;
 	detail: string;
 	measurement: string;
 }
 
-// Turn a completed recovery run into the on-screen verdict. Every claim here is
-// read off the run: `secure` is "the attacker's derived keys did not decrypt the
-// record", and `remainingBits` is the entropy actually withheld from them.
+// Report the run's observation and separately state model limits. No boolean
+// here equates failed guesses with cryptographic security.
 export function assess(recovery: RecoveryResult, combiner: Combiner): Verdict {
-	const holding = recovery.unknownComponents;
-	// Secure means two things both observed in the run: the attacker's derived
-	// keys failed to open the record, and there was real entropy they had to
-	// guess. Neither is read off a checkbox.
-	const secure = !recovery.recovered && holding.length > 0;
-	const remainingBits = recovery.unknownBits;
-
+	const observedNoRecovery = recovery.attempts > 0 && !recovery.recovered && recovery.unknownComponents.length > 0;
 	const measurement = recovery.recovered
-		? `attacker: ${recovery.attempts} derivation${recovery.attempts === 1 ? '' : 's'} \u00b7 record decrypted \u00b7 key matched 32/32 bytes`
-		: `attacker: ${recovery.attempts} derivations \u00b7 0 decrypted the record \u00b7 best candidate matched ${recovery.bestBytesMatched}/32 bytes`;
-
+		? `attacker: ${recovery.attempts} derivation${recovery.attempts === 1 ? '' : 's'} · record decrypted · best key match ${recovery.bestBytesMatched}/${recovery.keyBytes} bytes`
+		: `attacker: ${recovery.attempts} derivations · 0 decrypted the record · best candidate matched ${recovery.bestBytesMatched}/${recovery.keyBytes} bytes`;
 	let headline: string;
 	let detail: string;
 	if (recovery.recovered) {
-		headline = 'Broken \u2014 both halves down';
-		detail = `The attacker re-derived the session key and the intercepted record decrypted to \u201c${recovery.recoveredPlaintext}\u201d. No combiner can save you here; the whole point of a hybrid is that this should be far harder than breaking either one alone.`;
-	} else if (holding.length === 0) {
-		// Every secret was handed over yet the record survived: the derivation
-		// and the record disagree, which is a fault in the lab, not a hedge.
-		headline = 'Inconclusive \u2014 derivation mismatch';
-		detail =
-			'The attacker was given every component secret but their derived key did not open the intercepted record. That is not a security property; it means the session key and the record were produced from different inputs.';
-	} else if (holding.length === 2) {
-		headline = 'Fully secure';
-		detail =
-			'Neither component is broken. The session key has the full strength of both halves \u2014 this is the normal operating state.';
-	} else if (holding.includes('pq')) {
-		headline = 'Still secure (PQ holds)';
-		detail =
-			'A quantum computer has broken the classical X25519 half, but ML-KEM is intact. The attacker still had to guess the surviving secret, and the record stayed encrypted \u2014 this is exactly the future scenario hybrids are built for.';
+		headline = 'Record recovered';
+		detail = `A derived candidate decrypted the intercepted record to “${recovery.recoveredPlaintext}”. This reports the computation, not a break of real X25519 or ML-KEM.`;
+	} else if (recovery.attempts === 0) {
+		headline = 'Inconclusive — no attempts';
+		detail = 'No candidate key was tested; no recovery result is established.';
+	} else if (recovery.unknownComponents.length === 0) {
+		headline = 'Inconclusive — derivation mismatch';
+		detail = 'Every component secret was supplied but the derived key failed to decrypt. The session inputs and record disagree; this is a lab fault, not a security property.';
 	} else {
-		headline = 'Still secure (classical holds)';
-		detail =
-			'Cryptanalysis has weakened the post-quantum half, but classical X25519 is intact. The attacker still had to guess the surviving secret, and the record stayed encrypted \u2014 this is the hedge against a young PQC scheme being broken.';
+		headline = 'Not recovered in this run';
+		detail = `${recovery.withheldBytes} bytes of independent random simulated input were withheld. The finite failed guesses do not measure security strength.`;
 	}
-
-	detail += ` Measured this run \u2014 ${measurement}.`;
-
-	if (combiner === 'naive' && secure) {
-		detail +=
-			' Note: simple concatenation works here, but a robust combiner also binds the ciphertexts/transcript to prevent re-encapsulation and related attacks \u2014 which is why X-Wing uses a structured construction.';
+	detail += ` Output: ${recovery.keyBytes} bytes, so the session-key space is at most 2^${recovery.keyBytes * 8}; this is an upper bound, not guaranteed security. Real X25519 targets approximately 128-bit classical security (RFC 7748). Real component KEMs are not implemented here. Observed this run: ${measurement}.`;
+	if (combiner === 'naive' && observedNoRecovery) {
+		detail += ' The unbound hash ignores the public binding input; the separate transcript-binding experiment assumes equal component secrets. It does not demonstrate a realizable KEM attack or a robust combiner proof.';
 	}
-
-	return { remainingBits, secure, headline, detail, measurement };
+	return { withheldBytes: recovery.withheldBytes, keySpaceCapBits: recovery.keyBytes * 8,
+		observedNoRecovery, headline, detail, measurement };
 }
 
-// --- re-encapsulation / transcript-binding demonstration -------------------
-//
-// This is a REAL, computed demonstration (not a scripted animation) of why an
-// unbound combiner is dangerous.
-//
-// Setup: two runs of the protocol share the SAME component shared secrets
-// (ss_classical, ss_pq) but differ in their transcript / ciphertext binding.
-// This is precisely the situation a re-encapsulation attacker engineers: KEM
-// ciphertexts are not, in general, bound to their shared secret, so an attacker
-// who can re-encapsulate produces a DIFFERENT ciphertext transcript that still
-// decapsulates to the SAME shared secret at the honest party.
-//
-//   * The NAIVE combiner K = H(ss_c \u2016 ss_pq) ignores the transcript entirely,
-//     so BOTH runs derive the IDENTICAL session key. The key is not bound to
-//     the handshake the parties think they ran \u2014 the attack succeeds.
-//
-//   * The X-WING-style combiner folds ct_binding into the hash, so the two
-//     transcripts derive DIFFERENT session keys \u2014 the collision the attacker
-//     needs does not exist. The attack fails.
-//
-// We prove the outcome by actually deriving both keys and comparing them, so
-// the verdict below is measured, never asserted.
+// --- transcript-binding experiment ---------------------------------------
+// Assumption supplied by the fixture: equal component secrets, different public
+// binding inputs. Compare derived keys under that premise only. This does not
+// construct ciphertexts or show an attacker obtaining the same KEM secrets.
 
-export interface ReencapResult {
+export interface TranscriptBindingResult {
 	combiner: Combiner;
 	honestKey: Uint8Array; // key from the honest transcript
-	forgedKey: Uint8Array; // key from the attacker's re-encapsulated transcript
-	keysCollide: boolean; // true \u21d2 same key under both transcripts
-	attackSucceeds: boolean; // true \u21d2 unbound: attacker recovers the honest key
+	forgedKey: Uint8Array; // key from the second simulated transcript
+	keysCollide: boolean; // observed equality for these inputs only
+	sameComponentSecrets: boolean;
+	differentBindings: boolean;
 }
 
-// Run the re-encapsulation experiment for a given combiner. `honest` and
-// `forged` share their component secrets but carry different ct bindings.
-export async function reencapsulationAttack(
+// Compute key equality and the input premise; no attack-success verdict.
+export async function transcriptBindingExperiment(
 	honest: Components,
 	forged: Components,
 	combiner: Combiner,
-): Promise<ReencapResult> {
+): Promise<TranscriptBindingResult> {
 	const honestKey = await deriveSessionKey(honest, combiner);
 	const forgedKey = await deriveSessionKey(forged, combiner);
 	const keysCollide = bytesToHex(honestKey) === bytesToHex(forgedKey);
@@ -331,22 +295,19 @@ export async function reencapsulationAttack(
 		combiner,
 		honestKey,
 		forgedKey,
-		// The attack "succeeds" when the attacker's re-encapsulated (forged)
-		// transcript yields the same session key as the honest one \u2014 i.e. the
-		// key is NOT bound to the transcript.
-		attackSucceeds: keysCollide,
+		sameComponentSecrets: bytesToHex(honest.classical) === bytesToHex(forged.classical) &&
+			bytesToHex(honest.pq) === bytesToHex(forged.pq),
+		differentBindings: bytesToHex(honest.ctBinding) !== bytesToHex(forged.ctBinding),
 		keysCollide,
 	};
 }
 
-// Build an honest/forged transcript pair that shares component secrets but
-// differs only in ct_binding \u2014 the exact input a re-encapsulation attacker
-// controls. Component secrets are reused deliberately; ct_binding differs.
-export function reencapPair(): { honest: Components; forged: Components } {
+// Deliberately supply equal simulated secrets and distinct public bindings.
+export function transcriptPair(): { honest: Components; forged: Components } {
 	const classical = randomBytes(32);
 	const pq = randomBytes(32);
 	const honest: Components = { classical, pq, ctBinding: randomBytes(32) };
-	// Same shared secrets, different transcript (a re-encapsulated ciphertext).
+	// This is an assumed input pair, not a generated KEM ciphertext pair.
 	let forgedBinding = randomBytes(32);
 	// Vanishingly unlikely, but keep the two transcripts distinct.
 	while (bytesToHex(forgedBinding) === bytesToHex(honest.ctBinding)) {

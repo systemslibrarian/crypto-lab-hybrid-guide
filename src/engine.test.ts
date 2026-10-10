@@ -7,8 +7,8 @@ import {
 	freshComponents,
 	openSession,
 	randomBytes,
-	reencapPair,
-	reencapsulationAttack,
+	transcriptPair,
+	transcriptBindingExperiment,
 	sha256,
 	tryDecryptRecord,
 	RECORD_PLAINTEXT,
@@ -150,9 +150,8 @@ describe('deriveSessionKey', () => {
 
 // These verdicts used to be selected from the two break flags (remainingBits =
 // unbroken * 256, headline chosen by an if-chain over the checkbox states).
-// They are now produced by running a real key-recovery attack against a real
-// AES-256-GCM record: `secure` is "the attacker's derived keys failed to
-// decrypt", and every test below drives the attack rather than the flags.
+// Actual candidate guesses are tested against AES-GCM. Observed failure is
+// distinct from security, and withheld input width is distinct from output width.
 describe('key recovery is really attempted', () => {
 	async function run(classicalBroken: boolean, pqBroken: boolean, combiner: Combiner = 'xwing') {
 		const session = await openSession(freshComponents(), combiner);
@@ -170,15 +169,15 @@ describe('key recovery is really attempted', () => {
 		expect(await tryDecryptRecord(session, randomBytes(32))).toBeNull();
 	});
 
-	it('both halves intact ⇒ the attack runs, fails, and the verdict is secure', async () => {
+	it('both halves intact ⇒ the attack runs, fails, and the verdict reports no recovery', async () => {
 		const { recovery, verdict } = await run(false, false);
 		expect(recovery.attempts).toBeGreaterThan(1);
 		expect(recovery.successes).toBe(0);
 		expect(recovery.recovered).toBe(false);
 		expect(recovery.unknownComponents).toEqual(['classical', 'pq']);
-		expect(verdict.remainingBits).toBe(512);
-		expect(verdict.secure).toBe(true);
-		expect(verdict.headline).toBe('Fully secure');
+		expect(verdict.withheldBytes).toBe(64);
+		expect(verdict.observedNoRecovery).toBe(true);
+		expect(verdict.headline).toBe('Not recovered in this run');
 	});
 
 	it('classical broken ⇒ the attacker holds that secret, still cannot decrypt', async () => {
@@ -186,18 +185,18 @@ describe('key recovery is really attempted', () => {
 		expect(recovery.successes).toBe(0);
 		expect(recovery.recoveredPlaintext).toBeNull();
 		expect(recovery.unknownComponents).toEqual(['pq']);
-		expect(verdict.remainingBits).toBe(256);
-		expect(verdict.secure).toBe(true);
-		expect(verdict.headline).toBe('Still secure (PQ holds)');
+		expect(verdict.withheldBytes).toBe(32);
+		expect(verdict.observedNoRecovery).toBe(true);
+		expect(verdict.headline).toBe('Not recovered in this run');
 	});
 
 	it('PQ broken ⇒ the attacker holds that secret, still cannot decrypt', async () => {
 		const { recovery, verdict } = await run(false, true);
 		expect(recovery.successes).toBe(0);
 		expect(recovery.unknownComponents).toEqual(['classical']);
-		expect(verdict.remainingBits).toBe(256);
-		expect(verdict.secure).toBe(true);
-		expect(verdict.headline).toBe('Still secure (classical holds)');
+		expect(verdict.withheldBytes).toBe(32);
+		expect(verdict.observedNoRecovery).toBe(true);
+		expect(verdict.headline).toBe('Not recovered in this run');
 	});
 
 	// The negative path: with nothing withheld the attack must actually work,
@@ -212,9 +211,9 @@ describe('key recovery is really attempted', () => {
 		expect(recovery.trueKeyKnownToAttacker).toBe(true);
 		expect(recovery.firstCandidateKeyHex).toBe(bytesToHex(session.sessionKey));
 		expect(recovery.bestBytesMatched).toBe(32);
-		expect(verdict.remainingBits).toBe(0);
-		expect(verdict.secure).toBe(false);
-		expect(verdict.headline).toBe('Broken — both halves down');
+		expect(verdict.withheldBytes).toBe(0);
+		expect(verdict.observedNoRecovery).toBe(false);
+		expect(verdict.headline).toBe('Record recovered');
 	});
 
 	it('the surviving half really is guessed, not assumed: candidates differ each attempt', async () => {
@@ -228,10 +227,10 @@ describe('key recovery is really attempted', () => {
 	it('holds for the naive combiner too — the attack is combiner-agnostic', async () => {
 		const secure = await run(true, false, 'naive');
 		expect(secure.recovery.recovered).toBe(false);
-		expect(secure.verdict.secure).toBe(true);
+		expect(secure.verdict.observedNoRecovery).toBe(true);
 		const broken = await run(true, true, 'naive');
 		expect(broken.recovery.recovered).toBe(true);
-		expect(broken.verdict.secure).toBe(false);
+		expect(broken.verdict.observedNoRecovery).toBe(false);
 	});
 
 	it('the measurement string reports what the run did', async () => {
@@ -248,7 +247,7 @@ describe('assess naive combiner caveat', () => {
 		return assess(await attemptKeyRecovery(session, { classicalBroken, pqBroken }), combiner);
 	}
 
-	it('appends a robust-combiner note when naive is selected and the verdict is still secure', async () => {
+	it('appends a robust-combiner note when naive is selected and the run reports no recovery', async () => {
 		const v = await verdictFor(false, false, 'naive');
 		expect(v.detail).toMatch(/robust combiner|re-encapsulation/);
 	});
@@ -258,7 +257,7 @@ describe('assess naive combiner caveat', () => {
 		expect(v.detail).not.toMatch(/robust combiner/);
 	});
 
-	it('does NOT append the naive caveat when both halves are broken (already insecure)', async () => {
+	it('does NOT append the naive caveat when both halves are broken (already recovered)', async () => {
 		const v = await verdictFor(true, true, 'naive');
 		expect(v.detail).not.toMatch(/robust combiner/);
 	});
@@ -292,40 +291,37 @@ describe('combiner known-answer tests (labelled construction)', () => {
 	});
 });
 
-// The core honesty fix: a REAL, computed re-encapsulation attack. Two protocol
-// runs share their component secrets but differ only in ct_binding (transcript).
-// A sound combiner must derive DIFFERENT keys; an unbound one collides.
-describe('re-encapsulation attack (transcript binding)', () => {
-	it('reencapPair: shares component secrets but differs in ct_binding', () => {
-		const { honest, forged } = reencapPair();
+// Assumed equal secrets and different public binding inputs; compare outputs.
+// These controls do not construct ciphertexts or establish a KEM attack.
+describe('transcript-binding experiment', () => {
+	it('transcriptPair: shares component secrets but differs in ct_binding', () => {
+		const { honest, forged } = transcriptPair();
 		expect(bytesToHex(honest.classical)).toBe(bytesToHex(forged.classical));
 		expect(bytesToHex(honest.pq)).toBe(bytesToHex(forged.pq));
 		expect(bytesToHex(honest.ctBinding)).not.toBe(bytesToHex(forged.ctBinding));
 	});
 
-	it('NAIVE combiner is broken: forged transcript yields the SAME key ⇒ attack succeeds', async () => {
-		const { honest, forged } = reencapPair();
-		const r = await reencapsulationAttack(honest, forged, 'naive');
+	it('Unbound hash ignores different binding inputs when secrets are supplied equal', async () => {
+		const { honest, forged } = transcriptPair();
+		const r = await transcriptBindingExperiment(honest, forged, 'naive');
 		expect(bytesToHex(r.honestKey)).toBe(bytesToHex(r.forgedKey));
 		expect(r.keysCollide).toBe(true);
-		expect(r.attackSucceeds).toBe(true);
 	});
 
-	it('X-WING combiner defends: forged transcript yields a DIFFERENT key ⇒ attack fails', async () => {
-		const { honest, forged } = reencapPair();
-		const r = await reencapsulationAttack(honest, forged, 'xwing');
+	it('Custom bound hash yields different keys for the assumed pair', async () => {
+		const { honest, forged } = transcriptPair();
+		const r = await transcriptBindingExperiment(honest, forged, 'xwing');
 		expect(bytesToHex(r.honestKey)).not.toBe(bytesToHex(r.forgedKey));
 		expect(r.keysCollide).toBe(false);
-		expect(r.attackSucceeds).toBe(false);
 	});
 
-	it('the attack outcome is measured, not asserted: naive collides across many trials', async () => {
+	it('key equality is computed under the same-secret premise across 25 chosen pairs', async () => {
 		for (let i = 0; i < 25; i++) {
-			const { honest, forged } = reencapPair();
-			const naive = await reencapsulationAttack(honest, forged, 'naive');
-			const xwing = await reencapsulationAttack(honest, forged, 'xwing');
-			expect(naive.attackSucceeds).toBe(true);
-			expect(xwing.attackSucceeds).toBe(false);
+			const { honest, forged } = transcriptPair();
+			const naive = await transcriptBindingExperiment(honest, forged, 'naive');
+			const xwing = await transcriptBindingExperiment(honest, forged, 'xwing');
+			expect(naive.keysCollide).toBe(true);
+			expect(xwing.keysCollide).toBe(false);
 		}
 	});
 
@@ -337,5 +333,70 @@ describe('re-encapsulation attack (transcript binding)', () => {
 		const naiveHonest = await deriveSessionKey(honest, 'naive');
 		const naiveForged = await deriveSessionKey(forged, 'naive');
 		expect(bytesToHex(naiveHonest)).toBe(bytesToHex(naiveForged));
+	});
+});
+
+describe('bounded teaching measurements', () => {
+	it.each([-1, .5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1])('invalid attempt budget %s cannot fabricate a failed-guess observation', async attempts => {
+		const session = await openSession(fixedComponents(), 'xwing');
+		await expect(attemptKeyRecovery(session, { classicalBroken: false, pqBroken: false }, attempts)).rejects.toThrow(RangeError);
+	});
+	it.each(['naive', 'xwing'] as const)('separates withheld input bytes from %s output width and finite observations', async combiner => {
+		const session = await openSession(fixedComponents(), combiner);
+		const recovery = await attemptKeyRecovery(session, { classicalBroken: false, pqBroken: false }, 1);
+		const verdict = assess(recovery, combiner);
+		expect(session.sessionKey.length).toBe(32);
+		expect(recovery).toHaveProperty('withheldBytes', 64);
+		expect(verdict).toHaveProperty('keySpaceCapBits', 256);
+		expect(verdict).not.toHaveProperty('secure');
+		expect(verdict.headline).toBe('Not recovered in this run');
+		expect(verdict.detail).toContain('do not measure security strength');
+		expect(verdict.detail).toContain('128-bit classical');
+	});
+
+	it('zero attempts are inconclusive rather than evidence of security', async () => {
+		const session = await openSession(fixedComponents(), 'xwing');
+		const recovery = await attemptKeyRecovery(session, { classicalBroken: false, pqBroken: false }, 0);
+		const v = assess(recovery, 'xwing');
+		expect(recovery.attempts).toBe(0);
+		expect(v).toHaveProperty('observedNoRecovery', false);
+		expect(v.headline).toContain('Inconclusive');
+	});
+
+	it('failure after handing over every secret is an inconsistent-session control', async () => {
+		const session = await openSession(fixedComponents(), 'xwing');
+		const unrelated = { ...session, components: freshComponents() };
+		const recovery = await attemptKeyRecovery(unrelated, { classicalBroken: true, pqBroken: true });
+		expect(recovery.recovered).toBe(false);
+		const v = assess(recovery, 'xwing');
+		expect(v.headline).toContain('Inconclusive');
+		expect(v).toHaveProperty('observedNoRecovery', false);
+	});
+
+	it.each(['naive', 'xwing'] as const)('reports the equal-secret/different-binding premise without an attack claim (%s)', async combiner => {
+		const { honest, forged } = transcriptPair();
+		const result = await transcriptBindingExperiment(honest, forged, combiner);
+		expect(result).toHaveProperty('sameComponentSecrets', true);
+		expect(result).toHaveProperty('differentBindings', true);
+		expect(result).not.toHaveProperty('attackSucceeds');
+	});
+
+	it.each(['naive', 'xwing'] as const)('identical inputs give equal outputs without a different-transcript premise (%s)', async combiner => {
+		const c = fixedComponents();
+		const result = await transcriptBindingExperiment(c, c, combiner);
+		expect(result.sameComponentSecrets).toBe(true);
+		expect(result.differentBindings).toBe(false);
+		expect(result.keysCollide).toBe(true);
+	});
+
+	it('different secrets can yield different unbound keys: equality depends on the supplied premise', async () => {
+		const first = fixedComponents();
+		const second = fixedComponents();
+		second.classical[0] ^= 1;
+		second.ctBinding[0] ^= 1;
+		const result = await transcriptBindingExperiment(first, second, 'naive');
+		expect(result.sameComponentSecrets).toBe(false);
+		expect(result.differentBindings).toBe(true);
+		expect(result.keysCollide).toBe(false);
 	});
 });

@@ -51,7 +51,7 @@ export interface Pitfall {
 
 export const PITFALLS: Pitfall[] = [
 	{ good: true, title: 'Combine, don’t replace', body: 'Run the classical and PQ key exchanges in parallel and bind both results; the session key holds if either component survives.' },
-	{ good: true, title: 'Use a sound combiner', body: 'A dual-PRF or split-key-PRF combiner (as in X-Wing) preserves IND-CCA security; bind ciphertexts/transcript to stop re-encapsulation attacks.' },
+	{ good: true, title: 'Use a sound combiner', body: 'Use an analyzed combiner with its exact component and proof assumptions. The custom transcript experiment is not a proof that adding a binding hash makes arbitrary KEM combinations IND-CCA secure.' },
 	{ good: true, title: 'Test for ossification', body: 'Larger PQ key shares can push the ClientHello past one packet; verify middleboxes and old firewalls handle it before broad rollout.' },
 	{ good: false, title: 'XOR-ing raw secrets', body: 'Naively XOR-ing or truncating shared secrets can destroy security guarantees; always run them through a proper KDF/combiner.' },
 	{ good: false, title: 'Assuming hybrid = slow', body: 'Hybrid handshakes are nearly as fast as classical ones; the bottleneck is usually message size and middleboxes, not CPU.' },

@@ -6,8 +6,8 @@ import {
 	attemptKeyRecovery,
 	assess,
 	bytesToHex,
-	reencapPair,
-	reencapsulationAttack,
+	transcriptPair,
+	transcriptBindingExperiment,
 	type Components,
 	type ComponentName,
 	type Combiner,
@@ -149,18 +149,19 @@ function renderHero(): HTMLElement {
     </button>
     <div class="cl-hero-main">
       <h1 class="cl-hero-title">Hybrid KEM</h1>
-      <p class="cl-hero-sub">X25519 + ML-KEM-768 · KEM combiner</p>
+      <p class="cl-hero-sub">Random component-secret model · custom combiner</p>
       <p class="cl-hero-desc">
-        Break the classical or the post-quantum half and watch a transcript-bound
-        combiner keep the derived session key secure as long as either secret holds.
+        Supply either simulated component secret and observe finite candidate
+        decryption attempts. Compare transcript binding under an explicit equal-secret premise.
       </p>
     </div>
     <aside class="cl-hero-why" aria-label="Why it matters">
       <span class="cl-hero-why-label">WHY IT MATTERS</span>
       <p class="cl-hero-why-text">
         A quantum computer could break X25519, and young PQC schemes could still fall to
-        cryptanalysis. Hybrids hedge both at once, and a bound combiner — unlike naive
-        concatenation — resists the re-encapsulation attacks that unbind a key from its handshake.
+        cryptanalysis. An analyzed hybrid can hedge these risks under its component
+        and combiner assumptions. This custom hash experiment illustrates binding;
+        it does not establish that security proof or a real KEM attack.
       </p>
     </aside>
   `;
@@ -270,7 +271,7 @@ function renderPlayground(): { node: HTMLElement; controller: PlaygroundControll
     <div class="combiner-bar">
       <label>Combiner:
         <select id="combiner">
-          <option value="xwing" selected>X-Wing-style (bound)</option>
+          <option value="xwing" selected>Custom bound hash (X-Wing-inspired)</option>
           <option value="naive">Naive concatenation</option>
         </select>
       </label>
@@ -294,14 +295,13 @@ function renderPlayground(): { node: HTMLElement; controller: PlaygroundControll
 
     <div class="attack-row">
       <p class="attack-intro panel-copy">
-        Re-encapsulation attack, computed live: two protocol runs share the same
-        component secrets but carry <em>different</em> ciphertext transcripts — exactly
-        what an attacker who re-encapsulates controls. We derive both session keys with
-        the selected combiner and compare them. If they collide, the key was never bound
-        to the handshake and the attacker wins.
+        Transcript-binding experiment: assume two runs have equal simulated component
+        secrets and <em>different</em> public binding inputs. We supply that premise,
+        derive both keys and compare them. No KEM ciphertexts are generated, and this
+        does not establish a realizable re-encapsulation or key-recovery attack.
       </p>
       <button type="button" class="action-button action-button--danger" id="run-attack">
-        Run re-encapsulation attack
+        Run transcript-binding experiment
       </button>
       <div class="attack-result" id="attack-result" hidden></div>
     </div>
@@ -316,24 +316,24 @@ function renderPlayground(): { node: HTMLElement; controller: PlaygroundControll
         <button type="button" id="copy-key" class="ghost-button ghost-button--compact" aria-label="Copy session key to clipboard">Copy</button>
       </div>
 
-      <div class="bitgrid-wrap" role="group" aria-label="Attacker remaining uncertainty, visualised as bits">
-        <p class="hero-metric-label">Attacker’s remaining uncertainty <span class="bitgrid-count" id="bitgrid-count" aria-hidden="true"></span></p>
+      <div class="bitgrid-wrap" role="group" aria-label="Withheld simulated input bytes, visualised as input bits">
+        <p class="hero-metric-label">Simulated input bytes withheld <span class="bitgrid-count" id="bitgrid-count" aria-hidden="true"></span></p>
         <div class="bitgrid-pair">
           <div class="bitgrid-col">
-            <p class="bitgrid-label"><span class="bitgrid-dot bitgrid-dot--classical"></span> X25519 · 256 bits</p>
-            <div class="bitgrid" id="bitgrid-classical" role="img" aria-label="Classical half entropy grid"></div>
+            <p class="bitgrid-label"><span class="bitgrid-dot bitgrid-dot--classical"></span> X25519 model · 32 input bytes</p>
+            <div class="bitgrid" id="bitgrid-classical" role="img" aria-label="Classical simulated input grid"></div>
           </div>
           <div class="bitgrid-col">
-            <p class="bitgrid-label"><span class="bitgrid-dot bitgrid-dot--pq"></span> ML-KEM-768 · 256 bits</p>
-            <div class="bitgrid" id="bitgrid-pq" role="img" aria-label="Post-quantum half entropy grid"></div>
+            <p class="bitgrid-label"><span class="bitgrid-dot bitgrid-dot--pq"></span> ML-KEM model · 32 input bytes</p>
+            <div class="bitgrid" id="bitgrid-pq" role="img" aria-label="Post-quantum simulated input grid"></div>
           </div>
         </div>
         <div
           class="entropy-track"
           role="progressbar"
-          aria-label="Attacker remaining uncertainty in bits"
+          aria-label="Withheld simulated input bytes"
           aria-valuemin="0"
-          aria-valuemax="512"
+          aria-valuemax="64"
           aria-valuenow="0"
           id="entropy-track"
         >
@@ -358,7 +358,7 @@ function renderPlayground(): { node: HTMLElement; controller: PlaygroundControll
 	const attackResult = $('attack-result');
 	const copyCodeBtn = $('copy-code') as HTMLButtonElement;
 
-	// Render bit grids once. Each cell = 1 bit; 16×16 = 256 bits per half.
+	// Render bit grids once. Each cell = one input bit, not a bit of cryptographic security.
 	function buildGrid(host: HTMLElement, kind: 'classical' | 'pq') {
 		const frag = document.createDocumentFragment();
 		for (let i = 0; i < 256; i++) {
@@ -415,14 +415,14 @@ const sessionKey = new Uint8Array(
 		if (combiner === 'naive') {
 			body.textContent = 'K = SHA-256( ss_classical ‖ ss_pq )';
 			note.textContent =
-				'Just concatenates and hashes. Sufficient when both halves are random, but does not bind the transcript — a real attacker can re-encapsulate.';
+				'Hashes the two simulated secrets and ignores the public binding input. The equal-secret experiment demonstrates that omission, not an attack against named KEMs.';
 			code.textContent = SNIPPET_NAIVE;
 			if (label) label.textContent = 'SHA-256 ‖';
 		} else {
 			body.textContent =
 				'K = SHA-256( "crypto-lab-hybrid" ‖ ss_pq ‖ ss_classical ‖ ct_binding )';
 			note.textContent =
-				'Domain-separated and transcript-bound, à la X-Wing. The label and ciphertext binding make re-encapsulation attacks fail.';
+				'Custom SHA-256 hash with a label and public binding input. Real X-Wing uses SHA3-256 with exact X25519 ciphertext/public-key inputs and a scheme-specific proof; this lab does not reproduce that construction.';
 			code.textContent = SNIPPET_XWING;
 			if (label) label.textContent = 'SHA-256 ⊕';
 		}
@@ -445,11 +445,11 @@ const sessionKey = new Uint8Array(
 	}
 
 	// Which halves the grids show as unknown comes from the secrets the attack
-	// actually had to guess, and the bit count from the entropy it measured.
-	function paintBitGrids(unknown: ComponentName[], remainingBits: number): void {
+	// actually had to guess. Their byte count is not a security estimate.
+	function paintBitGrids(unknown: ComponentName[], withheldBytes: number): void {
 		$('bitgrid-classical').classList.toggle('is-broken', !unknown.includes('classical'));
 		$('bitgrid-pq').classList.toggle('is-broken', !unknown.includes('pq'));
-		$('bitgrid-count').textContent = ` · ${remainingBits} / 512 bits unknown`;
+		$('bitgrid-count').textContent = ` · ${withheldBytes} / 64 input bytes withheld`;
 	}
 
 	async function refresh(): Promise<void> {
@@ -475,29 +475,30 @@ const sessionKey = new Uint8Array(
 
 		const v = assess(recovery, combiner);
 		$('recovery-line').textContent = v.measurement;
-		const pct = (v.remainingBits / 512) * 100;
+		const pct = (v.withheldBytes / 64) * 100;
 		const fill = $('entropy-fill');
 		fill.style.width = `${pct}%`;
-		fill.className = 'entropy-fill ' + (v.secure ? 'entropy-fill--ok' : 'entropy-fill--bad');
-		$('entropy-val').textContent = `${v.remainingBits} bits to guess`;
-		entropyTrack.setAttribute('aria-valuenow', String(v.remainingBits));
+		fill.className = 'entropy-fill ' + (v.observedNoRecovery ? 'entropy-fill--ok' : 'entropy-fill--bad');
+		$('entropy-val').textContent = `${v.withheldBytes} input bytes withheld · key-space cap ${v.keySpaceCapBits} bits`;
+		entropyTrack.setAttribute('aria-valuenow', String(v.withheldBytes));
 		entropyTrack.setAttribute(
 			'aria-valuetext',
-			`${v.remainingBits} bits of attacker uncertainty out of 512`,
+			`${v.withheldBytes} simulated input bytes withheld out of 64; this is not security strength`,
 		);
 
 		const chip = $('verdict-chip');
-		chip.className = 'vs-chip ' + (v.secure ? 'vs-chip--ok' : 'vs-chip--bad');
+		chip.className = 'vs-chip ' + (v.observedNoRecovery ? 'vs-chip--ok' : 'vs-chip--bad');
 		chip.textContent = v.headline;
 		$('verdict-detail').innerHTML = v.detail;
 
 		paintDiagram(state);
-		paintBitGrids(recovery.unknownComponents, v.remainingBits);
+		paintBitGrids(recovery.unknownComponents, v.withheldBytes);
 		updateFormula(combiner);
 
-		if (v.headline !== lastHeadline) {
-			announce(v.headline + '. ' + v.remainingBits + ' bits of attacker uncertainty.');
-			lastHeadline = v.headline;
+		const announcementKey = `${v.headline}|${v.withheldBytes}`;
+		if (announcementKey !== lastHeadline) {
+			announce(v.headline + '. ' + v.withheldBytes + ' simulated input bytes withheld. Finite guesses do not measure security.');
+			lastHeadline = announcementKey;
 		}
 	}
 
@@ -553,24 +554,24 @@ const sessionKey = new Uint8Array(
 		void sessionKey.offsetWidth;
 
 		// Actually run the experiment: one shared-secret pair, two transcripts.
-		const { honest, forged } = reencapPair();
-		const result = await reencapsulationAttack(honest, forged, combiner);
+		const { honest, forged } = transcriptPair();
+		const result = await transcriptBindingExperiment(honest, forged, combiner);
 		const honestHex = bytesToHex(result.honestKey);
 		const forgedHex = bytesToHex(result.forgedKey);
 		const shortH = honestHex.slice(0, 20);
 		const shortF = forgedHex.slice(0, 20);
 
-		if (result.attackSucceeds) {
+		if (result.keysCollide) {
 			attackResult.dataset.tone = 'bad';
 			attackResult.innerHTML = `
-        <strong>Attack succeeds — the two keys collide.</strong>
+        <strong>Keys match in this experiment.</strong>
         The naive combiner is <code>H(ss_classical ‖ ss_pq)</code>, which never
-        touches the transcript, so a re-encapsulated ciphertext that decapsulates
-        to the same shared secrets derives the <em>same</em> session key.
+        touches the binding input. Equal secrets were supplied deliberately;
+        the resulting equal keys do not demonstrate secret recovery or a KEM attack.
         <div class="attack-keys">
-          <p>honest transcript &nbsp;→&nbsp; <code>${shortH}…</code></p>
-          <p>forged transcript &nbsp;→&nbsp; <code>${shortF}…</code></p>
-          <p class="attack-keys__verdict">identical ⇒ key not bound to the handshake</p>
+          <p>first transcript &nbsp;→&nbsp; <code>${shortH}…</code></p>
+          <p>second transcript &nbsp;→&nbsp; <code>${shortF}…</code></p>
+          <p class="attack-keys__verdict">identical ⇒ binding input ignored for this pair</p>
         </div>
       `;
 			sessionKey.classList.add('is-attacked');
@@ -578,25 +579,24 @@ const sessionKey = new Uint8Array(
 		} else {
 			attackResult.dataset.tone = 'ok';
 			attackResult.innerHTML = `
-        <strong>Attack fails — the two keys differ.</strong>
-        The X-Wing-style combiner folds <code>ct_binding</code> (and a
-        domain-separation label) into the hash, so the attacker's re-encapsulated
-        transcript derives a <em>different</em> session key. The collision they
-        need does not exist.
+        <strong>Keys differ in this experiment.</strong>
+        The custom bound hash includes <code>ct_binding</code> and a label.
+        This chosen pair yields different keys; that observation is not an IND-CCA
+        proof, real X-Wing execution, or a re-encapsulation attack control.
         <div class="attack-keys">
-          <p>honest transcript &nbsp;→&nbsp; <code>${shortH}…</code></p>
-          <p>forged transcript &nbsp;→&nbsp; <code>${shortF}…</code></p>
-          <p class="attack-keys__verdict">different ⇒ key bound to the handshake</p>
+          <p>first transcript &nbsp;→&nbsp; <code>${shortH}…</code></p>
+          <p>second transcript &nbsp;→&nbsp; <code>${shortF}…</code></p>
+          <p class="attack-keys__verdict">different ⇒ changing binding input changed this output</p>
         </div>
       `;
 			sessionKey.classList.add('is-shielded');
-			toast('X-Wing combiner: keys differ', 'ok');
+			toast('Custom bound hash: keys differ', 'ok');
 		}
 		attackResult.hidden = false;
 		announce(
-			result.attackSucceeds
-				? 'Re-encapsulation attack succeeds: the naive combiner produced the same key for both transcripts.'
-				: 'Re-encapsulation attack fails: the bound combiner produced different keys for the two transcripts.',
+			result.keysCollide
+				? 'Equal-secret transcript experiment: unbound hash produced the same key. No KEM attack is established.'
+				: 'Equal-secret transcript experiment: custom bound hash produced different keys for this pair.',
 		);
 	}
 
