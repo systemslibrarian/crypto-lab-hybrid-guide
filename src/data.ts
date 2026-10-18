@@ -8,23 +8,23 @@ export interface DecisionStep {
 
 export const DECISION: DecisionStep[] = [
 	{
-		question: 'Does any data need to stay secret for years (past ~2030)?',
-		yes: 'Go hybrid now — harvest-now-decrypt-later means today’s traffic can be recorded and decrypted later by a quantum computer.',
-		no: 'Hybrid is lower priority, but still wise for new long-lived systems.',
+		question: 'Does any data need to stay secret for years?',
+		yes: 'Prioritize post-quantum protection now. For TLS 1.3, choose a supported hybrid or pure-PQ configuration that meets your policy and interoperability needs.',
+		no: 'Assess the lifetime of the system as well as its data; plan a supported PQ migration path.',
 	},
 	{
 		question: 'Is the post-quantum scheme young / recently standardised?',
 		yes: 'Hybrid hedges the risk — if the PQC scheme is later weakened, the classical half still protects you.',
-		no: 'Even mature PQC benefits from a classical hedge during transition.',
+		no: 'Pure-PQ can be appropriate where policy and interoperability permit; a classical hedge adds complexity as well as a fallback assumption.',
 	},
 	{
 		question: 'Can your stack tolerate larger handshakes?',
-		yes: 'Use a hybrid KEM like X-Wing (X25519 + ML-KEM-768).',
+		yes: 'Test the protocol-defined PQ or hybrid group your peers support. X-Wing is a general-purpose KEM, not a substitute for a TLS named group.',
 		no: 'Test for middlebox ossification first — larger ClientHello messages have historically tripped old network gear.',
 	},
 	{
 		question: 'Do you need a single, simple, vetted choice?',
-		yes: 'Use X-Wing — it fixes the components, combiner, and hash so you don’t have to.',
+		yes: 'Use a vetted implementation of the configuration specified for your protocol and policy. Hybrid and pure-PQ TLS are both options.',
 		no: 'A generic KEM combiner lets you pick components, but you must use a sound (dual-PRF / split-key) construction.',
 	},
 ];
@@ -50,7 +50,7 @@ export interface Pitfall {
 }
 
 export const PITFALLS: Pitfall[] = [
-	{ good: true, title: 'Combine, don’t replace', body: 'Run the classical and PQ key exchanges in parallel and bind both results; the session key holds if either component survives.' },
+	{ good: true, title: 'Choose for your protocol', body: 'An analyzed hybrid can hedge against failure of one component. Pure-PQ is also a recommended TLS option in NCSC guidance; choose according to policy, supported implementations and interoperability.' },
 	{ good: true, title: 'Use a sound combiner', body: 'Use an analyzed combiner with its exact component and proof assumptions. The custom transcript experiment is not a proof that adding a binding hash makes arbitrary KEM combinations IND-CCA secure.' },
 	{ good: true, title: 'Test for ossification', body: 'Larger PQ key shares can push the ClientHello past one packet; verify middleboxes and old firewalls handle it before broad rollout.' },
 	{ good: false, title: 'XOR-ing raw secrets', body: 'Naively XOR-ing or truncating shared secrets can destroy security guarantees; always run them through a proper KDF/combiner.' },
@@ -79,35 +79,42 @@ export const TIMELINE_EVENTS: TimelineEvent[] = [
 		classical: 'safe',
 		pq: 'safe',
 		label: 'Hybrid key exchange goes mainstream',
-		detail: 'Cloudflare reports roughly 38% of human HTTPS traffic uses hybrid post-quantum key exchange. Anything recorded today without hybrid is harvest-now bait.',
+		detail: 'Cloudflare reports roughly 38% of human HTTPS traffic uses hybrid post-quantum key exchange. Recorded classical-only key exchanges can face harvest-now-decrypt-later risk; both suitable hybrid and pure-PQ key establishment can address it.',
+	},
+	{
+		year: 2026,
+		classical: 'safe',
+		pq: 'safe',
+		label: 'NCSC recommends hybrid and pure-PQ TLS',
+		detail: 'Published guidance, 15 October 2026: both choices are recommended for TLS 1.3. Hybrid RFC 10024 is published; pure-PQ options are available in libraries while their final RFC is pending. This concerns key establishment, not a post-quantum authentication recommendation.',
 	},
 	{
 		year: 2028,
 		classical: 'fragile',
 		pq: 'safe',
-		label: 'Classical key sizes downgraded',
-		detail: 'NIST formally deprecates 112-bit-equivalent classical algorithms. Hybrid deployments protect long-lived secrets while migration continues.',
+		label: 'Illustrative migration checkpoint',
+		detail: 'Scenario assumption, not an official deadline: migration is underway. PQ or hybrid key establishment protects new sessions; it cannot protect copies previously harvested from classical-only sessions.',
 	},
 	{
 		year: 2030,
 		classical: 'fragile',
 		pq: 'safe',
-		label: 'CRQC capability projected (low-end)',
-		detail: 'Mainstream forecasts begin placing a cryptographically relevant quantum computer in reach. Classical-only sessions recorded today become a future liability.',
+		label: 'Illustrative early quantum-threat scenario',
+		detail: 'Scenario assumption, not a forecast: the quantum threat draws closer. This chosen date illustrates why data lifetime matters; it does not predict when a cryptographically relevant quantum computer will exist.',
 	},
 	{
 		year: 2035,
 		classical: 'broken',
 		pq: 'safe',
-		label: 'Estimated CRQC arrival',
-		detail: 'Most expert surveys cluster their 50% probability for a CRQC around the mid-2030s. Hybrid sessions are still safe because ML-KEM holds; pure-classical sessions are exposed.',
+		label: 'Assumed quantum break for this scenario',
+		detail: 'Scenario assumption: a quantum computer breaks the classical component while ML-KEM remains secure. Suitable hybrid and pure-PQ key establishment retain confidentiality under that assumption; classical-only recordings are exposed.',
 	},
 	{
 		year: 2040,
 		classical: 'broken',
 		pq: 'safe',
-		label: 'Pure-PQ becomes the recommended default',
-		detail: 'With a decade of cryptanalysis behind ML-KEM and its successors, hybrids start being retired in favour of pure-PQ defaults — but the systems that went hybrid in 2025 had a smooth ride here.',
+		label: 'Illustrative review of the classical hedge',
+		detail: 'Scenario assumption, not a scheduled standards decision: reassess whether the classical hedge is still needed. Pure-PQ TLS is already recommended by NCSC in 2026; do not wait until 2040 solely because of this illustration.',
 	},
 ];
 

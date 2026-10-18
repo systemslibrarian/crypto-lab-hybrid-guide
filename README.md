@@ -8,7 +8,7 @@ An interactive guide to hybrid cryptography and the post-quantum transition. An 
 
 ## When to Use It
 
-- **Deciding whether to go hybrid** — a four-question guide that settles most cases; for long-lived secrets the answer is almost always yes.
+- **Deciding whether to go hybrid** — a four-question guide weighing policy, interoperability and a classical hedge; long-lived secrets need PQ protection, which may use hybrid or pure-PQ TLS.
 - **Explaining the conditional "either half holds" hedge** — inspect which simulated secrets are supplied and which candidate decryption attempts succeed; explain the separate assumptions of an analyzed real combiner.
 - **Teaching KEM combiners** — contrast naive concatenation with a bound, X-Wing-style construction and see why the difference matters.
 - **Planning a migration** — understand the phases, the harvest-now-decrypt-later threat, and real deployment pitfalls like middlebox ossification.
@@ -24,7 +24,7 @@ Generate a session from two simulated 32-byte inputs. Its 32-byte SHA-256 output
 
 ## What Can Go Wrong
 
-- **Replacing instead of combining** — switching straight to a young PQC scheme removes the classical safety net; an analyzed hybrid can preserve a hedge under its specific assumptions. This does not add the nominal security bits of its components.
+- **Treating hybrid as mandatory** — an analyzed hybrid can preserve a classical hedge under its specific assumptions, but suitable pure-PQ TLS is also recommended by NCSC. Choose according to protocol, policy and interoperability; component security bits do not add together.
 - **XOR-ing or truncating raw secrets** — naively mixing shared secrets can destroy the security proof; always run components through a sound KDF/combiner.
 - **Using an unbound combiner** — the custom unbound hash ignores our public binding input. Production security requires an analyzed construction and its exact component-specific assumptions; adding a transcript hash alone is not a proof.
 - **Middlebox ossification** — larger post-quantum key shares can push the TLS ClientHello past one packet; Google's CECPQ2 experiment showed old network gear may drop or mishandle these connections.
@@ -37,6 +37,10 @@ Generate a session from two simulated 32-byte inputs. Its 32-byte SHA-256 output
 - **Cloudflare edge** — reported that roughly 38% of human HTTPS traffic on its network used hybrid post-quantum key exchange by March 2025.
 - **Signal PQXDH** — augments Signal's classical extended Diffie-Hellman with a post-quantum KEM for messaging key establishment.
 - **Harvest-now-decrypt-later defense** — organisations enable hybrids today so traffic recorded now cannot be decrypted later once large-scale quantum computers exist.
+
+## Deployment guidance reviewed 18 October 2026
+
+[NCSC, 15 October 2026](https://www.ncsc.gov.uk/blogs/post-quantum-updates-to-our-tls-guidance), recommends both hybrid and pure-PQ TLS 1.3 configurations for general use and government OFFICIAL information. Hybrid RFC 10024 is published; the pure-PQ RFC is still pending, with stable library options available. This concerns key establishment, not post-quantum authentication. The visible decision guide links this source. Future timeline dates and the assumed quantum break are teaching scenarios, not forecasts or official deadlines; pure-PQ is not postponed to 2040. The illustrative engine remains unchanged.
 
 ## How to Run Locally
 

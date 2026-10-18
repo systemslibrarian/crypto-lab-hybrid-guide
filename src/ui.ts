@@ -693,10 +693,11 @@ function renderTimeline(): HTMLElement {
     <div class="section-heading-row">
       <div>
         <p class="section-kicker">Migration</p>
-        <h2 id="timeline-heading" tabindex="-1">The Next 15 Years</h2>
+        <h2 id="timeline-heading" tabindex="-1">Published Guidance and an Illustrative Future</h2>
         <p class="section-footnote">
-          Drag the year to see how the threat picture shifts. The point of going hybrid in 2025
-          is that the sessions you record today still need to be safe in 2035.
+          Drag the year to explore a scenario. The 2024–2026 entries describe published developments;
+          later dates and security states are assumptions, not forecasts or official deadlines.
+          “Safe” means the model assumes that component holds, not a security certification.
         </p>
       </div>
     </div>
@@ -799,15 +800,15 @@ function renderTimeline(): HTMLElement {
 
 		if (event.classical === 'broken' && event.pq === 'safe') {
 			implEl.textContent =
-				'A session recorded today survives only if it used a hybrid. Pure-classical traffic from 2025 is now decryptable.';
+				'In this scenario, suitable hybrid or pure-PQ key establishment protects recorded sessions while ML-KEM holds. Classical-only recordings are exposed to the assumed quantum break.';
 			implEl.dataset.tone = 'bad';
 		} else if (event.classical === 'fragile') {
 			implEl.textContent =
-				'Migration window — hybrid lets your existing TLS stack still talk to legacy clients while protecting against the harvest-now-decrypt-later threat.';
+				'Illustrative migration window: deploy supported PQ or hybrid key establishment. A connection that falls back to classical-only does not gain post-quantum protection.';
 			implEl.dataset.tone = 'warn';
 		} else {
 			implEl.textContent =
-				'Both halves intact. Hybrid users pay the small handshake-size cost; classical-only users carry an invisible liability forward.';
+				'The model assumes both components hold today. Hybrid adds a classical hedge; pure-PQ protection relies on the PQ component. Classical-only recordings retain future quantum risk.';
 			implEl.dataset.tone = 'ok';
 		}
 
@@ -1055,13 +1056,14 @@ function renderDecision(): HTMLElement {
       <div>
         <p class="section-kicker">Decide</p>
         <h2 id="decision-heading" tabindex="-1">Should You Go Hybrid?</h2>
-        <p class="section-footnote">Four questions that settle most cases. For long-lived secrets, the answer is almost always yes.</p>
+        <p class="section-footnote">Four questions to weigh policy, interoperability and the value of a classical hedge. Protecting long-lived secrets does not require hybrid in every deployment.</p>
       </div>
     </div>
+    <p class="panel-copy" id="pqc-guidance-note"><a href="https://www.ncsc.gov.uk/blogs/post-quantum-updates-to-our-tls-guidance">NCSC guidance, 15 October 2026</a> recommends both hybrid and pure-PQ TLS 1.3 configurations for general use and government OFFICIAL information. Hybrid RFC 10024 is published; the pure-PQ RFC remains pending despite available library support. This is key-establishment guidance; post-quantum authentication guidance is separate.</p>
     <div class="decision-flow">${steps}</div>
     <aside class="decision-verdict">
-      <p class="decision-verdict__label">For most modern systems</p>
-      <p class="decision-verdict__value">Use X-Wing or the TLS X25519MLKEM768 hybrid group.</p>
+      <p class="decision-verdict__label">Choose within your protocol and policy</p>
+      <p class="decision-verdict__value">Use a vetted, supported PQ or hybrid configuration. For TLS, use its specified named groups; X-Wing serves a different, general-purpose KEM role.</p>
     </aside>
   `;
 	return section;
