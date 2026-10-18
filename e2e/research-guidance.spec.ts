@@ -7,8 +7,7 @@ test('PQ guidance stays accurate as the reader changes the timeline', async ({ p
   await expect(note.locator('a')).toHaveAttribute('href', 'https://www.ncsc.gov.uk/blogs/post-quantum-updates-to-our-tls-guidance');
   await expect(note).toContainText('authentication guidance is separate');
   for (const year of ['2026', '2035', '2040']) {
-    await page.locator('#timeline-slider').fill(year);
-    await page.locator('#timeline-slider').dispatchEvent('input');
+    await page.getByRole('button', { name: new RegExp(`^Jump to ${year}:`) }).click();
     await expect(page.locator('#timeline-year')).toHaveText(year);
     await expect(page.locator('#timeline-detail')).toContainText(/pure-PQ/i);
     if (year !== '2026') await expect(page.locator('#timeline-detail')).toContainText(/assumption/i);
