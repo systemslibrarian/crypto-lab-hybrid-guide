@@ -125,7 +125,8 @@ export async function boot(page: Page, theme: 'dark' | 'light'): Promise<void> {
   // The whole lab is injected by JS into an empty `#app`. Assert the structure
   // every scan relies on is really there, so no scan can pass over a shell.
   await expect(page.locator('#app .cl-hero-title')).toHaveText('Hybrid KEM');
-  await expect(page.locator('#app main.lab-main > .lab-section')).toHaveCount(7);
+  await expect(page.locator('#app main.lab-main > .lab-section')).toHaveCount(8);
+  await expect(page.locator('#real-context h2')).toHaveText('Real X25519: different public inputs, the same raw secret');
   await expect(page.locator('#playground-heading')).toHaveText('The Combiner');
   await expect(page.locator('.bitgrid-cell')).toHaveCount(512);
   // The combiner refresh is async (opens a real AES-GCM session, runs a real

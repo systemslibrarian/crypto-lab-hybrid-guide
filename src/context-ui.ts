@@ -1,13 +1,13 @@
 import { hex, runContext } from './context';
 
 export function mountContext(): void {
-  const section = document.createElement('section'); section.id = 'real-context'; section.className = 'section';
+  const section = document.createElement('section'); section.id = 'real-context'; section.className = 'lab-section';
   section.innerHTML = `<h2>Real X25519: different public inputs, the same raw secret</h2>
     <p>The earlier playground models component secrets. This separate experiment computes actual X25519 in your browser. A sender produces an ephemeral public coordinate c. An observer can compute c′ = 1/c modulo 2²⁵⁵−19 using only that public coordinate. X25519's clamped scalar removes the order-two difference, so the recipient derives the same raw secret from both.</p>
     <p>Predict: can a key derivation function notice the changed public coordinate if it receives only the unchanged secret?</p>
     <label for="context-case">Public input comparison</label>
     <select id="context-case"><option value="same">Control: the same public input twice</option><option value="inverse">Paper construction: invert the public coordinate</option><option value="fresh">Control: a fresh independent public input</option></select>
-    <button id="context-run" type="button">Generate keys and compare real derivations</button>
+    <button id="context-run" class="action-button" type="button">Generate keys and compare real derivations</button>
     <p id="context-status" role="status" aria-live="polite">Choose a case, then run.</p>
     <div id="context-output" hidden>
       <div class="context-scroll" role="region" aria-label="Public context derivation comparison" tabindex="0"><table><caption>Equality measured from the actual bytes</caption><thead><tr><th scope="col">Check</th><th scope="col">Result</th></tr></thead><tbody id="context-rows"></tbody></table></div>
