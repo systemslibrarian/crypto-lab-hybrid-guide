@@ -9,6 +9,7 @@ import {
 	bytesToHex,
 } from './engine.ts';
 import { mountApp } from './ui.ts';
+import { mountContext } from './context-ui.ts';
 
 (async function selfTest() {
 	console.group('crypto-lab-hybrid-guide: combiner self-test');
@@ -34,6 +35,7 @@ import { mountApp } from './ui.ts';
 })();
 
 mountApp(document.querySelector<HTMLDivElement>('#app')!);
+mountContext();
 
 (function initThemeToggle() {
 	const button = document.getElementById('theme-toggle') as HTMLButtonElement | null;
