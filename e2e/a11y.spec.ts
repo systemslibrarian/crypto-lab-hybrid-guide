@@ -34,6 +34,16 @@ interface State {
 }
 
 const STATES: State[] = [
+  ...(['same', 'inverse', 'fresh'] as const).map(mode => ({
+    label: `real X25519 public context: ${mode}`,
+    drive: async (page: Page) => {
+      await page.selectOption('#context-case', mode);
+      await page.locator('#context-run').click();
+      await expect(page.locator('#context-output')).toBeVisible();
+      await page.locator('#context-output summary').click();
+      await expect(page.locator('#context-bytes')).toBeVisible();
+    },
+  })),
   {
     // The default mount. Both halves intact, the attack ran and failed, the
     // re-encapsulation result and the code snippet are still closed/hidden.

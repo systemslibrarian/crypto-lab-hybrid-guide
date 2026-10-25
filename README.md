@@ -4,7 +4,7 @@
 
 An interactive guide to hybrid cryptography and the post-quantum transition. An analyzed hybrid combiner can preserve confidentiality if one component remains secure under its stated assumptions. This lab uses random simulated component secrets, real SHA-256 and AES-256-GCM, and candidate decryption attempts. A separate **transcript-binding experiment** deliberately supplies equal component secrets under different public bindings and compares outputs. It does not establish a realizable re-encapsulation or key-recovery attack against X25519, ML-KEM or X-Wing.
 
-> **Scope and honesty note.** Both component inputs are independent random 32-byte strings; no real X25519 or ML-KEM runs here. Withholding both inputs means 64 input bytes, not 512 bits of session-key strength. Both hash constructions produce a 32-byte key: the key space is at most 2^256, an upper bound rather than a security guarantee. Real X25519 targets approximately 128-bit classical security ([RFC 7748](https://www.rfc-editor.org/rfc/rfc7748)). Finite failed candidate guesses do not measure security strength; the verdict reports only whether this run decrypted the record. The custom bound hash uses SHA-256 and a custom label/public binding, not interoperable X-Wing. [X-Wing draft-11 §§5.3/6](https://datatracker.ietf.org/doc/html/draft-connolly-cfrg-xwing-kem-11) specifies SHA3-256, exact X25519 ciphertext/public-key inputs, and component-specific proof assumptions; this demonstration does not supply that proof. Known-answer tests preserve the custom constructions.
+> **Scope and honesty note.** In the original playground, both component inputs are independent random 32-byte strings; neither X25519 nor ML-KEM runs in that playground. A separate real-X25519 context-binding exhibit is described below. Withholding both inputs means 64 input bytes, not 512 bits of session-key strength. Both hash constructions produce a 32-byte key: the key space is at most 2^256, an upper bound rather than a security guarantee. Real X25519 targets approximately 128-bit classical security ([RFC 7748](https://www.rfc-editor.org/rfc/rfc7748)). Finite failed candidate guesses do not measure security strength; the verdict reports only whether this run decrypted the record. The custom bound hash uses SHA-256 and a custom label/public binding, not interoperable X-Wing. [X-Wing draft-11 §§5.3/6](https://datatracker.ietf.org/doc/html/draft-connolly-cfrg-xwing-kem-11) specifies SHA3-256, exact X25519 ciphertext/public-key inputs, and component-specific proof assumptions; this demonstration does not supply that proof. Known-answer tests preserve the custom constructions.
 
 ## When to Use It
 
@@ -74,3 +74,27 @@ npm run build    # type-check + production build to dist/
 *Part of the [Crypto Lab](https://crypto-lab.systemslibrarian.dev/) suite.*
 
 *"So whether you eat or drink or whatever you do, do it all for the glory of God." — 1 Corinthians 10:31*
+
+
+## Real public-context binding
+
+A separate experiment executes the inverse-coordinate construction from
+[On the Necessity of Public Contexts in Hybrid KEMs](https://eprint.iacr.org/2026/140),
+§III-B. Native WebCrypto X25519 derives the same raw secret from `c` and
+`1/c mod (2^255−19)`. The public transformation receives no private key.
+A custom HKDF-SHA-256 comparison shows equal secret-only keys but different
+keys when the exact public coordinate and recipient public key are included.
+The same-input and fresh-input controls run the same code. Changing the selected
+case retires stale results, including computations still in flight.
+
+This is not X-Wing or HPKE, runs no ML-KEM, and supplies no hybrid or multi-user
+security theorem. The native primitive is checked against RFC 7748 §6.1's known
+answer; the tests also verify DH agreement, the field-inverse identity, the
+collision, recipient binding and low-order rejection. The UI shows actual bytes
+and never substitutes simulated outputs when native X25519 is unavailable.
+
+Validation: 55 unit tests, build and 23 browser/accessibility tests pass, including
+all three new cases at desktop and 380px. Run
+`node tools/check-context-mutations.mjs` to verify that successful-build changes
+to the public transformation, KDF context and negative scope claim are caught,
+then restore the exact source and baseline bundle.
