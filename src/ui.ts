@@ -884,7 +884,7 @@ function renderHandshake(): HTMLElement {
       </figcaption>
       <div class="middlebox-stage">
         <div class="mb-lane">
-          <span class="mb-lane__tag">classical · 64 B</span>
+          <span class="mb-lane__tag">classical · 32 B</span>
           <div class="mb-lane__track">
             <span class="mb-icon mb-icon--client" aria-hidden="true">client</span>
             <span class="mb-icon mb-icon--firewall" aria-hidden="true">middlebox</span>
@@ -894,7 +894,7 @@ function renderHandshake(): HTMLElement {
           <span class="mb-lane__verdict mb-lane__verdict--ok">handshake completes</span>
         </div>
         <div class="mb-lane mb-lane--pq">
-          <span class="mb-lane__tag">hybrid · 2.3 KB</span>
+          <span class="mb-lane__tag">hybrid · 1,216 B</span>
           <div class="mb-lane__track">
             <span class="mb-icon mb-icon--client" aria-hidden="true">client</span>
             <span class="mb-icon mb-icon--firewall mb-icon--firewall--strict" aria-hidden="true">middlebox</span>
