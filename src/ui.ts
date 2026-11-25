@@ -950,17 +950,16 @@ function renderBenchmark(): HTMLElement {
         <p class="bench-tile__note">SHA-256( label ‖ ss_pq ‖ ss_classical ‖ ct )</p>
       </li>
       <li class="bench-tile bench-tile--headline" id="bench-total">
-        <p class="bench-tile__label">Full hybrid handshake (KDF only)</p>
+        <p class="bench-tile__label">Estimated input generation + combiner</p>
         <p class="bench-tile__value mono-inline mono-inline--meter">—</p>
-        <p class="bench-tile__note">freshComponents + X-Wing combiner per session</p>
+        <p class="bench-tile__note">Sum of the separately measured averages for freshComponents and the X-Wing-style combiner</p>
       </li>
     </ol>
 
     <p class="panel-copy">
-      For context, real X25519 takes roughly 50&nbsp;µs and a real ML-KEM-768 encap is
-      around 30&nbsp;µs on a modern laptop CPU — well under any human-perceptible
-      threshold. The bottleneck for hybrid deployments has never been compute; it is
-      the larger handshake on the wire, which the previous section quantified.
+      These timings cover random input generation and SHA-256 on this device.
+      A full handshake also includes the key exchange and network traffic. To measure
+      end-to-end latency, time the actual protocol on the devices and network of interest.
     </p>
   `;
 
@@ -980,6 +979,9 @@ function renderBenchmark(): HTMLElement {
 	async function runBenchmark(): Promise<void> {
 		btn.disabled = true;
 		btn.textContent = 'Running…';
+		for (const meter of section.querySelectorAll('.bench-tile__value')) {
+			meter.textContent = '—';
+		}
 		stateEl.textContent = 'Warming up…';
 		try {
 			await new Promise((r) => requestAnimationFrame(() => r(null)));

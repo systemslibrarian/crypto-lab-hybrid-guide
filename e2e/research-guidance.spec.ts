@@ -15,3 +15,28 @@ test('PQ guidance stays accurate as the reader changes the timeline', async ({ p
   await expect(page.locator('#timeline-implication')).toContainText('hybrid or pure-PQ');
   await expect(page.locator('body')).not.toContainText('survives only if it used a hybrid');
 });
+
+test('a failed benchmark clears all earlier timings and a retry measures again', async ({ page }) => {
+  await page.goto('./');
+  const run = page.locator('#run-benchmark');
+  const state = page.locator('#bench-state');
+  const meters = page.locator('.bench-tile__value');
+  await expect(page.locator('#bench-total')).toContainText('Sum of the separately measured averages');
+  await run.click();
+  await expect(state).toContainText('iterations per measurement');
+  await expect(meters).toHaveCount(4);
+  for (const meter of await meters.all()) await expect(meter).toHaveText(/\d/);
+  await page.evaluate(() => {
+    const digest = crypto.subtle.digest.bind(crypto.subtle);
+    crypto.subtle.digest = () => {
+      crypto.subtle.digest = digest;
+      return Promise.reject(new Error('digest unavailable for this measurement'));
+    };
+  });
+  await run.click();
+  await expect(state).toContainText('Benchmark failed');
+  await expect(meters).toHaveText(['—', '—', '—', '—']);
+  await run.click();
+  await expect(state).toContainText('iterations per measurement');
+  for (const meter of await meters.all()) await expect(meter).toHaveText(/\d/);
+});

@@ -54,7 +54,7 @@ export const PITFALLS: Pitfall[] = [
 	{ good: true, title: 'Use a sound combiner', body: 'Use an analyzed combiner with its exact component and proof assumptions. The custom transcript experiment is not a proof that adding a binding hash makes arbitrary KEM combinations IND-CCA secure.' },
 	{ good: true, title: 'Test for ossification', body: 'Larger PQ key shares can push the ClientHello past one packet; verify middleboxes and old firewalls handle it before broad rollout.' },
 	{ good: false, title: 'XOR-ing raw secrets', body: 'Naively XOR-ing or truncating shared secrets can destroy security guarantees; always run them through a proper KDF/combiner.' },
-	{ good: false, title: 'Assuming hybrid = slow', body: 'Hybrid handshakes are nearly as fast as classical ones; the bottleneck is usually message size and middleboxes, not CPU.' },
+	{ good: false, title: 'Assuming hybrid = slow', body: 'Measure the complete handshake on the intended devices and network. Cryptographic operations, message size and middlebox behavior can all affect performance.' },
 	{ good: false, title: 'Forgetting to remove the hedge later', body: 'Hybrids are a transition tool. Once PQC has years of cryptanalysis behind it, plan a path to PQ-native to avoid carrying classical weakness forever.' },
 ];
 
