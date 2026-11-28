@@ -10,7 +10,7 @@ An interactive guide to hybrid cryptography and the post-quantum transition. An 
 
 - **Deciding whether to go hybrid** — a four-question guide weighing policy, interoperability and a classical hedge; long-lived secrets need PQ protection, which may use hybrid or pure-PQ TLS.
 - **Explaining the conditional "either half holds" hedge** — inspect which simulated secrets are supplied and which candidate decryption attempts succeed; explain the separate assumptions of an analyzed real combiner.
-- **Teaching KEM combiners** — contrast naive concatenation with a bound, X-Wing-style construction and see why the difference matters.
+- **Teaching KEM combiners** — compare a secret-only SHA-256 toy with a custom context-bound SHA-256 toy. Changing the public binding while holding the two secrets fixed shows exactly which inputs each hash uses.
 - **Planning a migration** — understand the phases, the harvest-now-decrypt-later threat, and real deployment pitfalls like middlebox ossification.
 - **Do NOT use this code in production** — it uses simulated secrets and SHA-256 to illustrate the construction; deploy a vetted library implementing X-Wing or a standardised hybrid group.
 
@@ -28,12 +28,12 @@ Generate a session from two simulated 32-byte inputs. Its 32-byte SHA-256 output
 - **XOR-ing or truncating raw secrets** — naively mixing shared secrets can destroy the security proof; always run components through a sound KDF/combiner.
 - **Using an unbound combiner** — the custom unbound hash ignores our public binding input. Production security requires an analyzed construction and its exact component-specific assumptions; adding a transcript hash alone is not a proof.
 - **Middlebox ossification** — larger post-quantum key shares can push the TLS ClientHello past one packet; Google's CECPQ2 experiment showed old network gear may drop or mishandle these connections.
-- **Carrying the classical hedge forever** — hybrids are a transition tool; once PQC has years of cryptanalysis behind it, plan a path to PQ-native rather than permanently inheriting classical weakness.
+- **Carrying the classical hedge forever** — reassess the need for the classical component as standards, policy and interoperability evolve. Removing a component can simplify deployment and also changes the assumptions protecting the connection.
 
 ## Real-World Usage
 
-- **TLS 1.3 hybrid key exchange** — the IETF-named X25519MLKEM768 group combines classical and post-quantum KEMs in the handshake, now widely supported in browsers and servers.
-- **X-Wing** — a general-purpose hybrid KEM (X25519 + ML-KEM-768 with a SHA3-256 combiner) designed as the sensible default, with a security proof reducing to ML-KEM-768 and the strong Diffie-Hellman assumption.
+- **TLS 1.3 hybrid key exchange** — the X25519MLKEM768 group supplies ordered component secrets to the TLS 1.3 key schedule. Its client and server key-exchange payloads are 1,216 and 1,120 bytes. Together they add 64 bytes (2.82%) over the 2,272-byte ML-KEM-768-only pair. These counts exclude TLS framing, other extensions and authentication. The page’s standalone toy hashes do not implement that schedule. [RFC 10024 §§4.1–4.3](https://www.rfc-editor.org/rfc/rfc10024.html#section-4).
+- **X-Wing** — a general-purpose hybrid KEM specified in an individual Internet-Draft (revision 11, September 2026). Its IND-CCA analysis assumes a random oracle and relies on ML-KEM-768’s IND-CCA security and the gap-CDH assumption on Curve25519. The proof is specific to this construction. [Draft §6](https://datatracker.ietf.org/doc/html/draft-connolly-cfrg-xwing-kem-11#section-6).
 - **Cloudflare edge** — reported that roughly 38% of human HTTPS traffic on its network used hybrid post-quantum key exchange by March 2025.
 - **Signal PQXDH** — augments Signal's classical extended Diffie-Hellman with a post-quantum KEM for messaging key establishment.
 - **Harvest-now-decrypt-later defense** — organisations enable hybrids today so traffic recorded now cannot be decrypted later once large-scale quantum computers exist.
